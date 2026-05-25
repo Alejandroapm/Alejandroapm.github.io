@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSG Pool Services | Weekly Pool & Hot Tub Cleaning</title>
+  <meta name="description" content="MSG Pool Services offers weekly swimming pool and hot tub cleaning in Kissimmee, St. Cloud, and the Orlando area. Starting at $90 per visit." />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="container topbar__inner">
+      <div class="topbar__left">
+        <span class="badge" data-i18n="topBadge">Weekly Cleaning</span>
+        <span class="muted" data-i18n="topArea">Kissimmee • St. Cloud • Orlando Area</span>
+      </div>
+
+      <div class="topbar__right">
+        <a class="topbar__link" href="tel:+17867673747">(786) 767-3747</a>
+        <span class="sep">|</span>
+        <a class="topbar__link" href="#quote" data-i18n="topQuote">Get a Quote</a>
+        <span class="sep">|</span>
+
+        <div class="lang-toggle" role="group" aria-label="Language toggle">
+          <button class="lang-toggle__btn is-active" id="langEN" type="button">EN</button>
+          <button class="lang-toggle__btn" id="langES" type="button">ES</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="container header__inner">
+      <a class="brand" href="#">
+        <img src="assets/logo.png" alt="MSG Pool Services logo" class="brand__logo" />
+        <div class="brand__text">
+          <div class="brand__name">MSG Pool Services</div>
+          <div class="brand__tagline" data-i18n="tagline">Swimming Pool and Hot Tub Cleaning Service</div>
+        </div>
+      </a>
+
+      <nav class="nav" aria-label="Primary">
+        <button class="nav__toggle" id="navToggle" aria-expanded="false" aria-controls="navMenu" data-i18n="menu">Menu</button>
+        <div class="nav__menu" id="navMenu">
+          <a href="#plans" data-i18n="navPlans">Plans</a>
+          <a href="#service" data-i18n="navService">Service</a>
+          <a href="#before-after" data-i18n="navBeforeAfter">Before & After</a>
+          <a href="#why" data-i18n="navWhy">Why Us</a>
+          <a href="#faq" data-i18n="navFaq">FAQ</a>
+          <a class="btn btn--small" href="#quote" data-i18n="navQuote">Get a Quote</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero" role="banner">
+    <div class="hero__bg" aria-hidden="true"></div>
+    <div class="container hero__inner">
+      <p class="hero__eyebrow" data-i18n="heroEyebrow">Fully Managed Pool Care</p>
+      <h1>
+        <span data-i18n="heroTitle1">Dive in.</span><br />
+        <em data-i18n="heroTitle2">We handle the rest.</em>
+      </h1>
+      <p class="lead" data-i18n="heroLead">
+        Professional weekly pool and hot tub cleaning. Clear pricing, reliable scheduling, and crystal-clear water — cleaning only, no repairs.
+      </p>
+
+      <ul class="hero__bullets">
+        <li data-i18n="heroB1">Skimming, brushing, vacuuming & chemistry</li>
+        <li data-i18n="heroB2">Filter and basket cleaning each visit</li>
+        <li data-i18n="heroB3">Service notes after every visit</li>
+        <li data-i18n="heroB4">No long-term contracts — cancel anytime</li>
+      </ul>
+
+      <div class="hero__price">
+        <span class="hero__price-label" data-i18n="startingAt">Starting at</span>
+        <span class="hero__price-value">$90</span>
+        <span class="hero__price-note" data-i18n="startingNote">/visit · final price depends on pool size & condition</span>
+      </div>
+
+      <div class="hero__cta">
+        <a class="btn" href="#quote" data-i18n="heroCta1">Get Your Quote</a>
+        <a class="btn btn--ghost" href="tel:+17867673747" data-i18n="heroCta2">Call Now</a>
+      </div>
+
+      <div class="stats" aria-label="Service highlights">
+        <div class="stats__item">
+          <strong data-i18n="stat1Val">Weekly</strong>
+          <span data-i18n="stat1Label">Reliable routes</span>
+        </div>
+        <div class="stats__item">
+          <strong data-i18n="stat2Val">$90+</strong>
+          <span data-i18n="stat2Label">Transparent pricing</span>
+        </div>
+        <div class="stats__item">
+          <strong data-i18n="stat3Val">Local</strong>
+          <span data-i18n="stat3Label">Kissimmee area pros</span>
+        </div>
+        <div class="stats__item">
+          <strong data-i18n="stat4Val">EN / ES</strong>
+          <span data-i18n="stat4Label">Bilingual service</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main class="main">
+
+    <!-- Plans -->
+    <section class="section" id="plans">
+      <div class="container">
+        <h2 data-i18n="plansTitle">Two ways to keep your pool beautiful</h2>
+        <p class="muted section__lead" data-i18n="plansSubtitle">
+          Pick the plan that fits your pool. Both focus on cleaning and water quality — not repairs.
+        </p>
+
+        <div class="plans">
+          <article class="plan-card">
+            <span class="plan-card__badge" data-i18n="plan1Badge">Most Common</span>
+            <h3 data-i18n="plan1Title">Weekly Pool Cleaning</h3>
+            <p class="muted" data-i18n="plan1Desc">
+              Regular maintenance to keep your pool sparkling all season. Same-day route when possible.
+            </p>
+            <ul class="list">
+              <li data-i18n="plan1a">Skimming, brushing & vacuuming</li>
+              <li data-i18n="plan1b">Water chemistry testing & balancing</li>
+              <li data-i18n="plan1c">Filter & basket cleaning</li>
+              <li data-i18n="plan1d">Visit notes after each service</li>
+            </ul>
+            <p class="plan-card__price">
+              <span data-i18n="planFrom">From</span> <strong>$90</strong>
+              <span class="muted" data-i18n="planPerVisit">/visit</span>
+            </p>
+            <a class="btn btn--full" href="#quote" data-i18n="planCta">Get a Quote</a>
+          </article>
+
+          <article class="plan-card plan-card--featured">
+            <span class="plan-card__badge plan-card__badge--accent" data-i18n="plan2Badge">Green or Cloudy?</span>
+            <h3 data-i18n="plan2Title">Deep Clean + Weekly Service</h3>
+            <p class="muted" data-i18n="plan2Desc">
+              Start with a thorough deep clean, then move to weekly maintenance to keep water clear.
+            </p>
+            <ul class="list">
+              <li data-i18n="plan2a">Everything in Weekly Cleaning</li>
+              <li data-i18n="plan2b">Shock, algaecide & heavy debris removal</li>
+              <li data-i18n="plan2c">Tile line & waterline scrubbing</li>
+              <li data-i18n="plan2d">Multi-visit recovery when needed</li>
+            </ul>
+            <p class="plan-card__price">
+              <strong data-i18n="plan2Price">Custom quote</strong>
+              <span class="muted" data-i18n="plan2Note">based on pool condition</span>
+            </p>
+            <a class="btn btn--full" href="#quote" data-i18n="planCta">Get a Quote</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Service -->
+    <section class="section section--alt" id="service">
+      <div class="container">
+        <h2 data-i18n="serviceTitle">What’s included every week</h2>
+        <p class="muted section__lead" data-i18n="serviceSubtitle">
+          One service standard for every customer — consistent cleaning you can count on.
+        </p>
+
+        <div class="card service-checklist">
+          <h3 data-i18n="weeklyChecklistTitle">Weekly Service Checklist</h3>
+          <ul class="checklist">
+            <li data-i18n="svc1">Pool cleaning (skim + brush walls/steps)</li>
+            <li data-i18n="svc2">Vacuum as needed</li>
+            <li data-i18n="svc3">Chemical testing & balancing</li>
+            <li data-i18n="svc4">Filter cleaning (as scheduled/needed)</li>
+            <li data-i18n="svc5">Empty skimmer & pump baskets</li>
+            <li data-i18n="svc6">Service report after each visit</li>
+            <li data-i18n="svc7">Weekly scheduling (same service day when possible)</li>
+          </ul>
+        </div>
+
+        <p class="fineprint" data-i18n="serviceFineprint">
+          “Starting at $90” applies to typical weekly maintenance pools. Green-to-clean or first-time deep cleans are quoted separately.
+        </p>
+      </div>
+    </section>
+
+    <!-- Before & After -->
+    <section class="section" id="before-after">
+      <div class="container">
+        <h2 data-i18n="baTitle">See the difference</h2>
+        <p class="muted section__lead" data-i18n="baSubtitle">
+          Drag the divider left or right to compare real pool results from our service area.
+        </p>
+
+        <div class="compare" data-compare>
+          <div class="compare__frame">
+            <img class="compare__img compare__img--after" src="assets/pool4.jpeg" alt="" loading="lazy" />
+            <div class="compare__before">
+              <img class="compare__img" src="assets/pool2.jpeg" alt="" loading="lazy" />
+            </div>
+            <button type="button" class="compare__handle" aria-label="Drag to compare before and after"></button>
+            <span class="compare__label compare__label--before" data-i18n="before">Before</span>
+            <span class="compare__label compare__label--after" data-i18n="after">After</span>
+          </div>
+          <input class="compare__slider" type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after" />
+          <p class="compare__caption muted">Kissimmee, FL</p>
+        </div>
+
+        <div class="gallery">
+          <figure class="gallery__item">
+            <img src="assets/pool1.jpeg" alt="Crystal clear pool" loading="lazy" />
+            <figcaption data-i18n="gallery1">Weekly maintenance</figcaption>
+          </figure>
+          <figure class="gallery__item">
+            <img src="assets/pool3.jpeg" alt="Clean pool water" loading="lazy" />
+            <figcaption data-i18n="gallery2">Hot tub care</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why Us -->
+    <section class="section section--alt" id="why">
+      <div class="container">
+        <h2 data-i18n="whyTitle">Why homeowners choose MSG</h2>
+        <p class="muted section__lead" data-i18n="whySubtitle">
+          You own a pool to relax — not to chase technicians or guess if the water is safe.
+        </p>
+
+        <div class="steps">
+          <article class="step-card">
+            <span class="step-card__num">01</span>
+            <h3 data-i18n="why1Title">Set and forget</h3>
+            <p data-i18n="why1Text">Weekly routes and predictable scheduling. You know service is happening — no wondering if someone will show up.</p>
+          </article>
+          <article class="step-card">
+            <span class="step-card__num">02</span>
+            <h3 data-i18n="why2Title">A team that knows your pool</h3>
+            <p data-i18n="why2Text">Every pool behaves differently. Over time we learn your equipment, chemistry, and patterns — familiarity builds.</p>
+          </article>
+          <article class="step-card">
+            <span class="step-card__num">03</span>
+            <h3 data-i18n="why3Title">Visible service</h3>
+            <p data-i18n="why3Text">Notes after every visit. You can see exactly what was done and how the water tested.</p>
+          </article>
+          <article class="step-card">
+            <span class="step-card__num">04</span>
+            <h3 data-i18n="why4Title">Flexible by design</h3>
+            <p data-i18n="why4Text">No long-term contracts. Pause, skip, or cancel with a quick message — no awkward calls.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section" id="how">
+      <div class="container">
+        <h2 data-i18n="howTitle">Booked in three simple steps</h2>
+
+        <div class="how-grid">
+          <article class="how-card">
+            <span class="how-card__step">1</span>
+            <h3 data-i18n="how1Title">Request a quote</h3>
+            <p class="muted" data-i18n="how1Text">Send your ZIP, pool type, and condition. We reply quickly with a clear price — no guessing.</p>
+          </article>
+          <article class="how-card">
+            <span class="how-card__step">2</span>
+            <h3 data-i18n="how2Title">Pick your start day</h3>
+            <p class="muted" data-i18n="how2Text">We add you to a weekly route in Kissimmee, St. Cloud, Poinciana, or nearby Orlando areas.</p>
+          </article>
+          <article class="how-card">
+            <span class="how-card__step">3</span>
+            <h3 data-i18n="how3Title">Relax — we’ve got it</h3>
+            <p class="muted" data-i18n="how3Text">Your pool gets serviced on schedule. You receive notes so you always know the water is handled.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Promise -->
+    <section class="section section--alt" id="promise">
+      <div class="container">
+        <h2 data-i18n="promiseTitle">Our service promise</h2>
+        <div class="promise-grid">
+          <div class="promise-card">
+            <h3 data-i18n="promise1Title">We make it right</h3>
+            <p class="muted" data-i18n="promise1Text">If something isn’t right after a visit, tell us within a few days — we’ll return to fix it.</p>
+          </div>
+          <div class="promise-card">
+            <h3 data-i18n="promise2Title">Clear communication</h3>
+            <p class="muted" data-i18n="promise2Text">Call or text anytime. Bilingual support in English and Spanish.</p>
+          </div>
+          <div class="promise-card">
+            <h3 data-i18n="promise3Title">No contracts</h3>
+            <p class="muted" data-i18n="promise3Text">Stay because the water stays clear — not because you’re locked in.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reviews -->
+    <section class="section" id="reviews">
+      <div class="container">
+        <h2 data-i18n="reviewsTitle">What customers say</h2>
+        <div class="reviews">
+          <blockquote class="review-card">
+            <p data-i18n="review1">“Consistent weekly service and the water finally stays clear. Great communication after every visit.”</p>
+            <footer><strong>Maria R.</strong> · <span data-i18n="reviewLoc1">Kissimmee, FL</span></footer>
+          </blockquote>
+          <blockquote class="review-card">
+            <p data-i18n="review2">“They brought our cloudy pool back fast and set us on a weekly plan. Professional and on time.”</p>
+            <footer><strong>James T.</strong> · <span data-i18n="reviewLoc2">St. Cloud, FL</span></footer>
+          </blockquote>
+          <blockquote class="review-card">
+            <p data-i18n="review3">“Hot tub and pool both handled weekly. Fair price and no repair upsells — exactly what we needed.”</p>
+            <footer><strong>Ana P.</strong> · <span data-i18n="reviewLoc3">Poinciana, FL</span></footer>
+          </blockquote>
+        </div>
+      </div>
+    </section>
+
+    <!-- Service area -->
+    <section class="section section--alt" id="service-area">
+      <div class="container">
+        <h2 data-i18n="areaTitle">Service area</h2>
+        <p class="muted section__lead" data-i18n="areaSubtitle">Kissimmee and nearby communities. Send your ZIP code to confirm coverage.</p>
+
+        <div class="grid grid--2">
+          <div class="card">
+            <h3 data-i18n="areaListTitle">Typical areas</h3>
+            <ul class="list">
+              <li>Kissimmee</li>
+              <li>Poinciana</li>
+              <li>St. Cloud</li>
+              <li>Orlando (select areas)</li>
+            </ul>
+            <a class="btn" href="#quote" data-i18n="areaCta">Check my ZIP</a>
+          </div>
+          <div class="card">
+            <h3 data-i18n="hoursTitle">Hours</h3>
+            <p><strong data-i18n="hours1Label">Mon–Sat:</strong> <span data-i18n="hours1">8am–6pm</span></p>
+            <p><strong data-i18n="hours2Label">Sunday:</strong> <span data-i18n="hours2">Closed</span></p>
+            <p class="muted" data-i18n="hoursNote">Weekly routes vary. We confirm your service day after signup.</p>
+            <p><strong data-i18n="contactPhone">Phone:</strong> <a href="tel:+17867673747">(786) 767-3747</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq">
+      <div class="container">
+        <h2 data-i18n="faqTitle">Pool cleaning questions, answered</h2>
+
+        <div class="accordion" id="faqAccordion">
+          <details>
+            <summary data-i18n="faqQ1">Do I need to be home during service?</summary>
+            <div class="accordion__content" data-i18n="faqA1">No. We need access to the backyard and pool equipment. Please secure pets before we arrive.</div>
+          </details>
+          <details>
+            <summary data-i18n="faqQ2">Do you bring chemicals?</summary>
+            <div class="accordion__content" data-i18n="faqA2">We can use your chemicals or include them in your quote — tell us your preference when you request a price.</div>
+          </details>
+          <details>
+            <summary data-i18n="faqQ3">Is this weekly service only?</summary>
+            <div class="accordion__content" data-i18n="faqA3">Yes. Weekly service keeps Florida pools stable and helps prevent algae. One-time deep cleans are available before weekly service starts.</div>
+          </details>
+          <details>
+            <summary data-i18n="faqQ4">How long does each visit take?</summary>
+            <div class="accordion__content" data-i18n="faqA4">Most weekly visits take 30 minutes to 2 hours depending on pool size, debris, and enclosure. Deep cleans may take longer.</div>
+          </details>
+          <details>
+            <summary data-i18n="faqQ5">Do you service above-ground pools and hot tubs?</summary>
+            <div class="accordion__content" data-i18n="faqA5">Yes. We service in-ground pools, above-ground pools, and hot tubs. Mention your setup in the quote form.</div>
+          </details>
+          <details>
+            <summary data-i18n="faqQ6">What should I do before you arrive?</summary>
+            <div class="accordion__content" data-i18n="faqA6">Clear the pool area, make sure the pump and filter are running, and keep pets away from the backyard during service.</div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quote -->
+    <section class="section section--alt" id="quote">
+      <div class="container">
+        <h2 data-i18n="quoteTitle">Get your quote</h2>
+        <p class="muted section__lead" data-i18n="quoteSubtitle">Send the basics and we’ll reply quickly with pricing for your pool.</p>
+
+        <div class="grid grid--2">
+          <form class="card" id="quoteForm" novalidate>
+            <div class="form-row">
+              <label for="name" data-i18n="formName">Name</label>
+              <input id="name" name="name" type="text" autocomplete="name" required />
+            </div>
+            <div class="form-row">
+              <label for="phone" data-i18n="formPhone">Phone</label>
+              <input id="phone" name="phone" type="tel" autocomplete="tel" required />
+            </div>
+            <div class="form-row">
+              <label for="email" data-i18n="formEmail">Email (optional)</label>
+              <input id="email" name="email" type="email" autocomplete="email" />
+            </div>
+            <div class="form-row">
+              <label for="zip" data-i18n="formZip">ZIP Code</label>
+              <input id="zip" name="zip" type="text" inputmode="numeric" required />
+            </div>
+            <div class="form-row">
+              <label for="poolType" data-i18n="formPoolType">Pool Type</label>
+              <select id="poolType" name="poolType" required>
+                <option value="" data-i18n="formSelect">Select…</option>
+                <option value="pool" data-i18n="formPool">Swimming Pool</option>
+                <option value="hottub" data-i18n="formHotTub">Hot Tub</option>
+                <option value="both" data-i18n="formBoth">Both</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="plan" data-i18n="formPlan">Interested in</label>
+              <select id="plan" name="plan">
+                <option value="weekly" data-i18n="formPlanWeekly">Weekly Cleaning</option>
+                <option value="deep" data-i18n="formPlanDeep">Deep Clean + Weekly</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="message" data-i18n="formNotes">Notes (screen enclosure, pets, trees, water condition)</label>
+              <textarea id="message" name="message" rows="4"></textarea>
+            </div>
+            <button class="btn btn--full" type="submit" data-i18n="formSubmit">Submit Quote Request</button>
+            <p class="fineprint" id="formStatus" aria-live="polite"></p>
+          </form>
+
+          <div class="card">
+            <h3 data-i18n="contactTitle">Contact</h3>
+            <p><strong data-i18n="contactPhone">Phone:</strong> <a href="tel:+17867673747">(786) 767-3747</a></p>
+            <p><strong data-i18n="contactEmail">Email:</strong> <a href="mailto:msgpoolservices2026@gmail.com">msgpoolservices2026@gmail.com</a></p>
+            <hr class="hr" />
+            <h3 data-i18n="quoteTipsTitle">Fast quote tips</h3>
+            <ul class="list">
+              <li data-i18n="tip1">ZIP code + city</li>
+              <li data-i18n="tip2">Screen enclosure? (yes/no)</li>
+              <li data-i18n="tip3">Current condition (green, cloudy, clear)</li>
+              <li data-i18n="tip4">Anything special (pets, trees, hot tub)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div>
+        <strong>MSG Pool Services</strong><br />
+        <span class="muted" data-i18n="footerTag">Weekly pool & hot tub cleaning · Kissimmee area</span>
+      </div>
+      <div class="footer__links">
+        <a href="#plans" data-i18n="navPlans">Plans</a>
+        <a href="#service" data-i18n="navService">Service</a>
+        <a href="#quote" data-i18n="navQuote">Get a Quote</a>
+        <a href="tel:+17867673747">(786) 767-3747</a>
+      </div>
+    </div>
+    <div class="container footer__copy">© <span id="year"></span> MSG Pool Services</div>
+  </footer>
+
+  <!-- Mobile sticky CTA -->
+  <div class="sticky-cta" aria-label="Quick actions">
+    <a class="btn btn--ghost" href="tel:+17867673747" data-i18n="stickyCall">Call</a>
+    <a class="btn" href="#quote" data-i18n="stickyQuote">Get a Quote</a>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
