@@ -111,6 +111,17 @@
   align-items:center;
   gap:8px;
 }
+/* Ghost buttons default to white-on-transparent (for dark hero sections);
+   on the light admin page that makes them invisible, so force a visible look. */
+.admin-page .btn--ghost{
+  background:#fff;
+  color:var(--navy);
+  border:1px solid var(--line);
+}
+.admin-page .btn--ghost:hover{
+  border-color:rgba(11,95,255,.45);
+  color:var(--brand);
+}
 #calendarTitle{
   font-weight:900;
   min-width:180px;
