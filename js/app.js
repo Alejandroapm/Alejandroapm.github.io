@@ -116,17 +116,17 @@ const dict = {
     heroB1: "Skimming, brushing, vacuuming & chemistry",
     heroB2: "Filter and basket cleaning each visit",
     heroB3: "Service notes after every visit",
-    heroB4: "No contracts — pay per visit, cancel anytime",
+    heroB4: "No contracts -simple monthly billing, cancel anytime",
     startingAt: "Starting at",
-    startingNote: "/visit · final price depends on pool size & condition",
+    startingNote: "/month · final price depends on pool size & condition",
     heroCta1: "Get Your Quote",
     heroCta2: "Call Now",
     stat1Val: "Weekly",
     stat1Label: "Reliable routes",
-    stat2Val: "$100+",
+    stat2Val: "$100/mo",
     stat2Label: "Transparent pricing",
     stat3Val: "No contract",
-    stat3Label: "Pay per visit only",
+    stat3Label: "Monthly billing",
     stat4Val: "EN / ES",
     stat4Label: "Bilingual service",
 
@@ -140,7 +140,7 @@ const dict = {
     plan1c: "Filter & basket cleaning",
     plan1d: "Visit notes after each service",
     planFrom: "From",
-    planPerVisit: "/visit",
+    planPerMonth: "/month",
     planCta: "Get a Quote",
     plan2Badge: "Green or Cloudy?",
     plan2Title: "Deep Clean + Weekly Service",
@@ -162,8 +162,8 @@ const dict = {
     svc5: "Empty skimmer & pump baskets",
     svc6: "Service report after each visit",
     svc7: "Weekly scheduling (same service day when possible)",
-    serviceFineprint: "“Starting at $100” applies to typical weekly maintenance pools. Green-to-clean or first-time deep cleans are quoted separately. No contracts — pay per visit.",
-    noContractBanner: "No contracts. Weekly service with no long-term commitment — cancel or pause anytime.",
+    serviceFineprint: "“Starting at $100/month” applies to typical weekly maintenance pools. Green-to-clean or first-time deep cleans are quoted separately. No contracts.",
+    noContractBanner: "No contracts. Weekly service with no long-term commitment -cancel or pause anytime.",
 
     baTitle: "See the difference",
     baSubtitle: "Drag the divider left or right to compare real pool results from our service area.",
@@ -182,7 +182,7 @@ const dict = {
     why3Title: "Visible service",
     why3Text: "Notes after every visit. You can see exactly what was done and how the water tested.",
     why4Title: "Flexible by design",
-    why4Text: "No contracts ever. Pause, skip, or cancel with a quick message — no penalties and no lock-in.",
+    why4Text: "No contracts ever. Pause, skip, or cancel with a quick message -no penalties and no lock-in.",
 
     howTitle: "Booked in three simple steps",
     how1Title: "Request a quote",
@@ -194,11 +194,11 @@ const dict = {
 
     promiseTitle: "Our service promise",
     promise1Title: "Consistent weekly care",
-    promise1Text: "The full checklist on every visit — skimming, brushing, vacuuming, chemistry, and filter care you can count on.",
+    promise1Text: "The full checklist on every visit -skimming, brushing, vacuuming, chemistry, and filter care you can count on.",
     promise2Title: "Clear communication",
     promise2Text: "Call or text anytime. Bilingual support in English and Spanish.",
     promise3Title: "No contracts",
-    promise3Text: "No long-term agreement. Pay per visit and stop anytime — no cancellation fees.",
+    promise3Text: "No long-term agreement. Simple monthly billing -cancel anytime with no cancellation fees.",
 
     reviewsTitle: "What customers say",
     review1: "“Our weekly service keeps the pool ready every weekend. Always on schedule and great communication.”",
@@ -232,7 +232,7 @@ const dict = {
     faqQ4: "Do you service above-ground pools and hot tubs?",
     faqA4: "Yes. We service in-ground pools, above-ground pools, and hot tubs. Mention your setup in the quote form.",
     faqQ5: "What should I do before you arrive?",
-    faqA5: "Keep the water at the proper level — we take care of the rest.",
+    faqA5: "Keep the water at the proper level -we take care of the rest.",
     faqQ6: "Do you do pool repairs or remodeling?",
     faqA6: "No, but we work with partners who can quote and help with your pool.",
     faqQ7: "Can you remove rust or calcium stains from the pool surface?",
@@ -296,17 +296,17 @@ const dict = {
     heroB1: "Recoger basura, cepillar, aspirar y químicos",
     heroB2: "Limpieza de filtro y canastas en cada visita",
     heroB3: "Notas de servicio después de cada visita",
-    heroB4: "Sin contratos — paga por visita, cancela cuando quieras",
+    heroB4: "Sin contratos -facturación mensual simple, cancela cuando quieras",
     startingAt: "Desde",
-    startingNote: "/visita · el precio final depende del tamaño y condición",
+    startingNote: "/mes · el precio final depende del tamaño y condición",
     heroCta1: "Pedir Cotización",
     heroCta2: "Llamar Ahora",
     stat1Val: "Semanal",
     stat1Label: "Rutas confiables",
-    stat2Val: "$100+",
+    stat2Val: "$100/mes",
     stat2Label: "Precios claros",
     stat3Val: "Sin contrato",
-    stat3Label: "Solo paga por visita",
+    stat3Label: "Facturación mensual",
     stat4Val: "EN / ES",
     stat4Label: "Servicio bilingüe",
 
@@ -320,7 +320,7 @@ const dict = {
     plan1c: "Limpieza de filtro y canastas",
     plan1d: "Notas después de cada visita",
     planFrom: "Desde",
-    planPerVisit: "/visita",
+    planPerMonth: "/mes",
     planCta: "Pedir Cotización",
     plan2Badge: "¿Verde o Turbia?",
     plan2Title: "Limpieza Profunda + Semanal",
@@ -342,8 +342,8 @@ const dict = {
     svc5: "Vaciar canastas del skimmer y la bomba",
     svc6: "Reporte después de cada visita",
     svc7: "Programación semanal (mismo día cuando sea posible)",
-    serviceFineprint: "“Desde $100” aplica a mantenimiento semanal típico. Limpiezas profundas o piscina verde se cotizan aparte. Sin contratos — paga por visita.",
-    noContractBanner: "Sin contratos. Servicio semanal sin compromiso a largo plazo — cancela o pausa cuando quieras.",
+    serviceFineprint: "“Desde $100/mes” aplica a mantenimiento semanal típico. Limpiezas profundas o piscina verde se cotizan aparte. Sin contratos.",
+    noContractBanner: "Sin contratos. Servicio semanal sin compromiso a largo plazo -cancela o pausa cuando quieras.",
 
     baTitle: "Mira la diferencia",
     baSubtitle: "Arrastra el divisor a la izquierda o derecha para comparar resultados reales.",
@@ -362,7 +362,7 @@ const dict = {
     why3Title: "Servicio visible",
     why3Text: "Notas después de cada visita. Ves exactamente qué se hizo y cómo quedó el agua.",
     why4Title: "Flexible",
-    why4Text: "Sin contratos. Pausa, salta o cancela con un mensaje — sin penalidades ni amarrarte.",
+    why4Text: "Sin contratos. Pausa, salta o cancela con un mensaje -sin penalidades ni amarrarte.",
 
     howTitle: "Reserva en tres pasos",
     how1Title: "Pide cotización",
@@ -374,11 +374,11 @@ const dict = {
 
     promiseTitle: "Nuestra promesa",
     promise1Title: "Cuidado semanal consistente",
-    promise1Text: "La lista completa en cada visita — recoger basura, cepillar, aspirar, químicos y filtro en los que puedes confiar.",
+    promise1Text: "La lista completa en cada visita -recoger basura, cepillar, aspirar, químicos y filtro en los que puedes confiar.",
     promise2Title: "Comunicación clara",
     promise2Text: "Llama o escribe cuando quieras. Soporte bilingüe en inglés y español.",
     promise3Title: "Sin contratos",
-    promise3Text: "Sin acuerdo a largo plazo. Paga por visita y cancela cuando quieras — sin cargos por cancelación.",
+    promise3Text: "Sin acuerdo a largo plazo. Facturación mensual simple -cancela cuando quieras sin cargos por cancelación.",
 
     reviewsTitle: "Lo que dicen los clientes",
     review1: "“El servicio semanal mantiene la piscina lista para la familia. Siempre puntuales y muy buena comunicación.”",
@@ -655,3 +655,14 @@ if (form) {
     }
   });
 }
+
+// Live Server only serves static files -admin login needs the Node server on port 3000.
+(function linkAdminToNodeServer() {
+  const link = document.querySelector('a[href="admin/login.html"]');
+  if (!link) return;
+  const staticPorts = new Set(["5500", "5501", "5502", "8080", "8888", "5173"]);
+  const port = window.location.port;
+  if (!port || staticPorts.has(port)) {
+    link.href = `${window.location.protocol}//${window.location.hostname}:3000/admin/login.html`;
+  }
+})();

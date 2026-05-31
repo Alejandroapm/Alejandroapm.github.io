@@ -1,0 +1,350 @@
+import Database from "better-sqlite3";
+import bcrypt from "bcryptjs";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { formatAddress, geocodeAddress } from "./geocode.js";
+import { DEFAULT_DEPOT } from "./routing.js";
+import { isInFlorida } from "./florida.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dataDir = path.join(__dirname, "..", "data");
+const dbPath = path.join(dataDir, "msg.db");
+
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+export const db = new Database(dbPath);
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    name TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    street TEXT,
+    city TEXT,
+    state TEXT DEFAULT 'FL',
+    zip TEXT,
+    lat REAL,
+    lng REAL,
+    service_day_of_week INTEGER NOT NULL,
+    pool_type TEXT DEFAULT 'pool',
+    monthly_rate REAL,
+    notes TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS service_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    type TEXT NOT NULL,
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    UNIQUE(customer_id, date, type)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_customers_day ON customers(service_day_of_week);
+  CREATE INDEX IF NOT EXISTS idx_overrides_date ON service_overrides(date);
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+`);
+
+function parseLegacyAddress(addr) {
+  if (!addr) return null;
+  const m = addr.match(/^(.+?),\s*([^,]+),\s*([A-Za-z]{2}),?\s*(\d{5}(?:-\d{4})?)\s*$/);
+  if (!m) return null;
+  return {
+    street: m[1].trim(),
+    city: m[2].trim(),
+    state: m[3].toUpperCase(),
+    zip: m[4],
+  };
+}
+
+function migrateCustomersTable() {
+  const cols = db.prepare("PRAGMA table_info(customers)").all().map((c) => c.name);
+  const add = (sql) => {
+    try { db.exec(sql); } catch { /* column exists */ }
+  };
+
+  if (!cols.includes("street")) {
+    add("ALTER TABLE customers ADD COLUMN street TEXT");
+    add("ALTER TABLE customers ADD COLUMN city TEXT");
+    add("ALTER TABLE customers ADD COLUMN state TEXT DEFAULT 'FL'");
+    add("ALTER TABLE customers ADD COLUMN zip TEXT");
+    add("ALTER TABLE customers ADD COLUMN lat REAL");
+    add("ALTER TABLE customers ADD COLUMN lng REAL");
+    db.prepare("UPDATE customers SET street = address WHERE street IS NULL AND address IS NOT NULL").run();
+    db.prepare("UPDATE customers SET state = 'FL' WHERE state IS NULL").run();
+  }
+
+  const legacyRows = db.prepare(`
+    SELECT id, address, street, city, zip FROM customers
+    WHERE address IS NOT NULL AND (city IS NULL OR city = '' OR zip IS NULL OR zip = '')
+  `).all();
+
+  const updateLegacy = db.prepare(`
+    UPDATE customers SET street = ?, city = ?, state = ?, zip = ? WHERE id = ?
+  `);
+
+  for (const row of legacyRows) {
+    const parsed = parseLegacyAddress(row.address || row.street);
+    if (parsed) {
+      updateLegacy.run(parsed.street, parsed.city, parsed.state, parsed.zip, row.id);
+    }
+  }
+}
+
+migrateCustomersTable();
+
+db.prepare(`
+  UPDATE customers SET lat = NULL, lng = NULL, updated_at = ?
+  WHERE lat IS NOT NULL AND (
+    lat < 24.4 OR lat > 31.1 OR lng < -87.7 OR lng > -79.8
+  )
+`).run(Date.now());
+
+if (!db.prepare("SELECT value FROM settings WHERE key = 'geocode_v2'").get()) {
+  db.prepare("UPDATE customers SET lat = NULL, lng = NULL, updated_at = ?").run(Date.now());
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES ('geocode_v2', '1', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(Date.now());
+}
+
+export function findAdminByEmail(email) {
+  return db.prepare("SELECT * FROM admins WHERE email = ? COLLATE NOCASE").get(email.trim());
+}
+
+export function findAdminById(id) {
+  return db.prepare("SELECT * FROM admins WHERE id = ?").get(id);
+}
+
+export function publicAdmin(row) {
+  if (!row) return null;
+  return { id: row.id, email: row.email, name: row.name };
+}
+
+export function publicCustomer(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone || "",
+    email: row.email || "",
+    street: row.street || row.address || "",
+    city: row.city || "",
+    state: row.state || "FL",
+    zip: row.zip || "",
+    fullAddress: formatAddress(row),
+    lat: row.lat,
+    lng: row.lng,
+    serviceDayOfWeek: row.service_day_of_week,
+    poolType: row.pool_type || "pool",
+    monthlyRate: row.monthly_rate,
+    notes: row.notes || "",
+    active: !!row.active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function parseAddressBody(body, existing = null) {
+  const street = String(body.street ?? existing?.street ?? existing?.address ?? "").trim();
+  const city = String(body.city ?? existing?.city ?? "").trim();
+  const zip = String(body.zip ?? existing?.zip ?? "").trim();
+  const state = "FL";
+
+  if (!street || !city || !zip) {
+    return { error: "Street, city, and ZIP are required." };
+  }
+  if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+    return { error: "Enter a valid ZIP code." };
+  }
+
+  return { street, city, state, zip, legacyAddress: `${street}, ${city}, ${state} ${zip}` };
+}
+
+export function coordsFromBody(body) {
+  const lat = body.lat != null && body.lat !== "" ? Number(body.lat) : null;
+  const lng = body.lng != null && body.lng !== "" ? Number(body.lng) : null;
+  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  return { lat, lng };
+}
+
+export async function geocodeAndSaveCustomer(id, addressParts, pickedCoords = null) {
+  if (pickedCoords && isInFlorida(pickedCoords.lat, pickedCoords.lng)) {
+    db.prepare("UPDATE customers SET lat = ?, lng = ?, updated_at = ? WHERE id = ?").run(
+      pickedCoords.lat, pickedCoords.lng, Date.now(), id
+    );
+    return { ...pickedCoords, approximate: false };
+  }
+
+  try {
+    const result = await geocodeAddress(addressParts);
+    if (result) {
+      db.prepare("UPDATE customers SET lat = ?, lng = ?, updated_at = ? WHERE id = ?").run(
+        result.lat, result.lng, Date.now(), id
+      );
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export { DAY_NAMES };
+
+export function getActiveCustomers() {
+  return db.prepare("SELECT * FROM customers WHERE active = 1 ORDER BY name ASC").all();
+}
+
+export function customersForDate(dateStr) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return [];
+
+  const dow = d.getDay();
+  const customers = getActiveCustomers();
+  const overrides = db.prepare("SELECT * FROM service_overrides WHERE date = ?").all(dateStr);
+
+  const skipIds = new Set(overrides.filter((o) => o.type === "skip").map((o) => o.customer_id));
+  const extraIds = overrides.filter((o) => o.type === "extra").map((o) => o.customer_id);
+
+  const scheduled = customers.filter((c) => c.service_day_of_week === dow && !skipIds.has(c.id));
+
+  for (const id of extraIds) {
+    if (!scheduled.find((c) => c.id === id)) {
+      const extra = customers.find((c) => c.id === id);
+      if (extra) scheduled.push(extra);
+    }
+  }
+
+  scheduled.sort((a, b) => a.name.localeCompare(b.name));
+
+  return scheduled.map((c) => {
+    const dayOverrides = overrides.filter((o) => o.customer_id === c.id);
+    return {
+      ...publicCustomer(c),
+      overrides: dayOverrides.map((o) => ({ type: o.type, note: o.note || "" })),
+    };
+  });
+}
+
+export function calendarSummary(year, month) {
+  const end = new Date(year, month, 0);
+  const summary = {};
+
+  for (let day = 1; day <= end.getDate(); day++) {
+    const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const list = customersForDate(dateStr);
+    summary[dateStr] = { count: list.length, customers: list };
+  }
+  return summary;
+}
+
+export function ensureAdminSeed() {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    console.warn("ADMIN_EMAIL / ADMIN_PASSWORD not set -skipping admin seed.");
+    return;
+  }
+
+  const existing = findAdminByEmail(adminEmail);
+  if (existing) return;
+
+  const hash = bcrypt.hashSync(adminPassword, 12);
+  db.prepare(`
+    INSERT INTO admins (email, password_hash, name, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(adminEmail.toLowerCase(), hash, "Administrator", Date.now());
+  console.log(`Admin account created for ${adminEmail}`);
+}
+
+export function getRouteStartSetting() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'route_start'").get();
+  if (row) {
+    try {
+      const parsed = JSON.parse(row.value);
+      return {
+        street: parsed.street || "",
+        city: parsed.city || "",
+        state: parsed.state || "FL",
+        zip: parsed.zip || "",
+        lat: parsed.lat ?? DEFAULT_DEPOT.lat,
+        lng: parsed.lng ?? DEFAULT_DEPOT.lng,
+        label: parsed.label || formatAddress(parsed) || DEFAULT_DEPOT.label,
+      };
+    } catch {
+      /* use default */
+    }
+  }
+
+  return {
+    street: "",
+    city: "Kissimmee",
+    state: "FL",
+    zip: "34741",
+    lat: DEFAULT_DEPOT.lat,
+    lng: DEFAULT_DEPOT.lng,
+    label: DEFAULT_DEPOT.label,
+  };
+}
+
+export async function saveRouteStartSetting(parts, pickedCoords = null) {
+  let lat = null;
+  let lng = null;
+
+  if (pickedCoords && isInFlorida(pickedCoords.lat, pickedCoords.lng)) {
+    lat = pickedCoords.lat;
+    lng = pickedCoords.lng;
+  } else {
+    const result = await geocodeAddress(parts);
+    lat = result?.lat ?? null;
+    lng = result?.lng ?? null;
+  }
+
+  const saved = {
+    street: parts.street,
+    city: parts.city,
+    state: "FL",
+    zip: parts.zip,
+    lat,
+    lng,
+    label: `${parts.street}, ${parts.city}, FL ${parts.zip}`,
+  };
+
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES ('route_start', ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(JSON.stringify(saved), Date.now());
+
+  return saved;
+}
+
+export function getRouteDepot() {
+  const start = getRouteStartSetting();
+  if (start.lat == null || start.lng == null) {
+    return { ...DEFAULT_DEPOT, label: start.label || DEFAULT_DEPOT.label };
+  }
+  return { lat: start.lat, lng: start.lng, label: start.label || "Route start" };
+}

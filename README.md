@@ -1,34 +1,59 @@
 # MSG Pool Services Website
 
-A single-page marketing site for **MSG Pool Services** - weekly pool and hot tub cleaning in the Kissimmee / Orlando area.
+Marketing site + **admin-only** business dashboard for **MSG Pool Services**.
 
-## Run locally
+## Public site
 
-Open `index.html` in your browser, or use a simple local server:
+Open via the Node server (recommended) or `npx serve .` for static preview only.
+
+## Admin dashboard
+
+Owner-only login at **/admin/login.html** with:
+
+- **Interactive calendar** -click any day to see all pools scheduled that day
+- **Add / edit customers** -name, phone, email, address, weekly service day, pool type, monthly rate
+- **Private notes** per customer (gate codes, pets, chemicals, etc.)
+- **Route overview** -pools per day of week
+- **Skip a day** or **add extra visit** for one-off schedule changes
+
+### Setup
 
 ```bash
-npx serve .
+cd server
+npm install
+copy .env.example .env
 ```
+
+Edit `server/.env`:
+
+```
+ADMIN_EMAIL=your@email.com
+ADMIN_PASSWORD=your-secure-password
+JWT_SECRET=long-random-string
+BASE_URL=http://localhost:3000
+```
+
+```bash
+npm start
+```
+
+Open **http://localhost:3000** → click **Log In** (top bar) or go to **/admin/login.html**.
+
+> Admin features require the server. Change the default password in `.env` before going live.
 
 ## Project structure
 
 ```
 mayelin/
-├── index.html      # Main page
-├── css/styles.css  # Styles
-├── js/app.js       # Nav, i18n (EN/ES), compare slider, quote form
-└── assets/         # Header_image.png, Slider_*_*.png, logo
+├── index.html          # Public marketing site
+├── admin/
+│   ├── login.html      # Admin log in
+│   ├── index.html      # Calendar + customer management
+│   └── dashboard.js
+├── js/app.js           # Public site (i18n, quote form, sliders)
+└── server/             # API + SQLite database
 ```
 
-## Customize
+## Quote form
 
-- **Photos:** `Header_image.png` (hero background), `Slider_1_1.png` / `Slider_1_2.png` (before/after; pairs 2 and 3 for additional sliders).
-- **Pricing:** Update `$100` in `index.html` and copy in `js/app.js`.
-- **Contact:** Phone and email are in `index.html` and the Web3Forms quote form.
-
-## Features
-
-- Home Gnome-inspired layout: hero, plans, service checklist, drag compare, why us, how it works, promise, reviews, FAQ, quote form
-- English / Spanish toggle (saved in browser)
-- Mobile nav + sticky Call / Quote bar
-- Quote form submits to [Web3Forms](https://web3forms.com) via AJAX (email and phone validated; HTML `action` fallback)
+Public quote form uses [Web3Forms](https://web3forms.com) (no server required for quotes).

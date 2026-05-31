@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Admin Dashboard | MSG Pool Services</title>
+
+  <link rel="stylesheet" href="../css/styles.css" />
+
+  <link rel="stylesheet" href="../css/admin.css" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
+</head>
+
+<body class="admin-page">
+
+  <header class="admin-topbar">
+
+    <div class="container admin-topbar__inner">
+
+      <div>
+
+        <strong>MSG Admin</strong>
+
+        <span class="muted" id="adminEmail"></span>
+
+      </div>
+
+      <div class="admin-topbar__actions">
+
+        <a href="../index.html" class="btn btn--ghost btn--small">View site</a>
+
+        <button type="button" class="btn btn--ghost btn--small" id="logoutBtn">Log out</button>
+
+      </div>
+
+    </div>
+
+  </header>
+
+
+
+  <main class="admin-main">
+
+    <div class="container admin-shell">
+
+      <aside class="admin-sidebar">
+
+        <nav class="admin-nav">
+
+          <button type="button" class="admin-nav__btn is-active" data-view="calendar">Calendar</button>
+
+          <button type="button" class="admin-nav__btn" data-view="route">Route planner</button>
+
+          <button type="button" class="admin-nav__btn" data-view="map">Customer map</button>
+
+          <button type="button" class="admin-nav__btn" data-view="customers">All customers</button>
+
+          <button type="button" class="admin-nav__btn" data-view="add">+ Add customer</button>
+
+        </nav>
+
+        <div class="admin-stats card" id="statsPanel">
+
+          <h3>Route overview</h3>
+
+          <p class="admin-stats__total"><strong id="statTotal">0</strong> active pools</p>
+
+          <ul class="admin-stats__list" id="statByDay"></ul>
+
+        </div>
+
+      </aside>
+
+
+
+      <div class="admin-content">
+
+        <!-- Calendar view -->
+
+        <section class="admin-view" id="view-calendar">
+
+          <div class="admin-toolbar">
+
+            <h1>Service calendar</h1>
+
+            <div class="calendar-nav">
+
+              <button type="button" class="btn btn--ghost btn--small" id="prevMonth" aria-label="Previous month">‹</button>
+
+              <span id="calendarTitle"></span>
+
+              <button type="button" class="btn btn--ghost btn--small" id="nextMonth" aria-label="Next month">›</button>
+
+              <button type="button" class="btn btn--ghost btn--small" id="todayBtn">Today</button>
+
+            </div>
+
+          </div>
+
+          <p class="muted section__lead">Click a day to see every pool on that route. Counts reflect weekly service days plus any extras or skips.</p>
+
+          <div class="calendar-grid" id="calendarGrid" aria-label="Monthly calendar"></div>
+
+        </section>
+
+
+
+        <!-- Route planner -->
+
+        <section class="admin-view" id="view-route" hidden>
+
+          <div class="admin-toolbar">
+
+            <div>
+
+              <h1>Route planner</h1>
+
+              <p class="muted section__lead">Optimized stop order for the most efficient pool route each day.</p>
+
+            </div>
+
+            <div class="route-toolbar">
+
+              <label class="route-date-label">
+
+                <span class="sr-only">Service date</span>
+
+                <input type="date" id="routeDate" />
+
+              </label>
+
+              <button type="button" class="btn btn--small" id="loadRouteBtn">Build route</button>
+
+            </div>
+
+          </div>
+
+          <details class="card route-start-panel" id="routeStartPanel" open>
+            <summary><strong>Route start address</strong> <span class="muted">-where you begin each day</span></summary>
+            <form id="routeStartForm" class="route-start-form" autocomplete="on">
+              <div class="form-row">
+                <label for="startStreet">Street address</label>
+                <input id="startStreet" name="street" required placeholder="Start typing to search…" autocomplete="address-line1" />
+              </div>
+              <div class="grid grid--2">
+                <div class="form-row">
+                  <label for="startCity">City</label>
+                  <input id="startCity" name="city" required placeholder="Kissimmee" autocomplete="address-level2" />
+                </div>
+                <div class="form-row">
+                  <label for="startState">State</label>
+                  <input id="startState" name="state" required value="FL" maxlength="2" autocomplete="address-level1" readonly aria-readonly="true" />
+                </div>
+              </div>
+              <div class="form-row form-row--zip">
+                <label for="startZip">ZIP code</label>
+                <input id="startZip" name="zip" required placeholder="34741" pattern="\d{5}(-\d{4})?" autocomplete="postal-code" />
+              </div>
+              <div class="admin-form__actions">
+                <button type="submit" class="btn btn--small">Save start address</button>
+                <p class="fineprint form-status" id="routeStartStatus" aria-live="polite"></p>
+              </div>
+            </form>
+          </details>
+
+          <div class="route-panel">
+
+            <div class="route-panel__list card">
+
+              <div class="route-panel__meta" id="routeMeta">
+
+                <p class="muted">Pick a date and build the route to see stops in order.</p>
+
+              </div>
+
+              <ol class="route-stop-list" id="routeStopList"></ol>
+
+              <div class="route-warnings" id="routeWarnings" hidden></div>
+
+            </div>
+
+            <div class="route-panel__map card">
+
+              <div id="routeMap" class="admin-map" role="img" aria-label="Optimized route map"></div>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+
+        <!-- Customer map -->
+
+        <section class="admin-view" id="view-map" hidden>
+
+          <div class="admin-toolbar">
+
+            <div>
+
+              <h1>Customer map</h1>
+
+              <p class="muted section__lead">All active pool locations. Addresses are geocoded when customers are saved.</p>
+
+            </div>
+
+            <button type="button" class="btn btn--ghost btn--small" id="refreshMapBtn">Refresh map</button>
+
+          </div>
+
+          <div class="map-panel card">
+
+            <div id="customerMap" class="admin-map admin-map--tall" role="img" aria-label="Customer locations map"></div>
+
+            <p class="fineprint map-legend"><span class="map-legend__dot"></span> Active customer &nbsp;·&nbsp; Customers without a mapped location need a complete street address.</p>
+
+          </div>
+
+        </section>
+
+
+
+        <!-- Customer list view -->
+
+        <section class="admin-view" id="view-customers" hidden>
+
+          <h1>All customers</h1>
+
+          <p class="muted section__lead">Manage your pool list, service days, and private notes.</p>
+
+          <div id="customerList" class="customer-list"></div>
+
+        </section>
+
+
+
+        <!-- Add / edit customer -->
+
+        <section class="admin-view" id="view-add" hidden>
+
+          <h1 id="formTitle">Add customer</h1>
+
+          <form class="card admin-form" id="customerForm" autocomplete="on">
+
+            <input type="hidden" id="customerId" name="customerId" value="" />
+
+            <div class="form-row">
+
+              <label for="name">Customer name *</label>
+
+              <input id="name" name="name" required />
+
+            </div>
+
+            <div class="grid grid--2">
+
+              <div class="form-row">
+
+                <label for="phone">Phone</label>
+
+                <input id="phone" name="phone" type="tel" />
+
+              </div>
+
+              <div class="form-row">
+
+                <label for="email">Email</label>
+
+                <input id="email" name="email" type="email" />
+
+              </div>
+
+            </div>
+
+            <fieldset class="address-fieldset">
+
+              <legend>Service address *</legend>
+
+              <div class="form-row">
+
+                <label for="street">Street address</label>
+
+                <input id="street" name="street" required placeholder="Start typing to search…" autocomplete="address-line1" />
+
+              </div>
+
+              <div class="grid grid--2">
+
+                <div class="form-row">
+
+                  <label for="city">City</label>
+
+                  <input id="city" name="city" required placeholder="Kissimmee" autocomplete="address-level2" />
+
+                </div>
+
+                <div class="form-row">
+
+                  <label for="state">State</label>
+
+                  <input id="state" name="state" required value="FL" maxlength="2" autocomplete="address-level1" readonly aria-readonly="true" />
+
+                </div>
+
+              </div>
+
+              <div class="form-row form-row--zip">
+
+                <label for="zip">ZIP code</label>
+
+                <input id="zip" name="zip" required placeholder="34741" pattern="\d{5}(-\d{4})?" autocomplete="postal-code" />
+
+              </div>
+
+            </fieldset>
+
+            <div class="grid grid--2">
+
+              <div class="form-row">
+
+                <label for="serviceDayOfWeek">Weekly service day *</label>
+
+                <select id="serviceDayOfWeek" name="serviceDayOfWeek" required>
+
+                  <option value="0">Sunday</option>
+
+                  <option value="1">Monday</option>
+
+                  <option value="2">Tuesday</option>
+
+                  <option value="3">Wednesday</option>
+
+                  <option value="4">Thursday</option>
+
+                  <option value="5">Friday</option>
+
+                  <option value="6">Saturday</option>
+
+                </select>
+
+              </div>
+
+              <div class="form-row">
+
+                <label for="poolType">Pool type</label>
+
+                <select id="poolType" name="poolType">
+
+                  <option value="pool">Swimming pool</option>
+
+                  <option value="hottub">Hot tub</option>
+
+                  <option value="both">Both</option>
+
+                </select>
+
+              </div>
+
+            </div>
+
+            <div class="form-row">
+
+              <label for="monthlyRate">Monthly rate ($)</label>
+
+              <input id="monthlyRate" name="monthlyRate" type="number" min="0" step="1" placeholder="100" />
+
+            </div>
+
+            <div class="form-row">
+
+              <label for="notes">Private notes</label>
+
+              <textarea id="notes" name="notes" rows="4" placeholder="Gate code, pets, chemicals, special instructions…"></textarea>
+
+            </div>
+
+            <div class="form-row" id="activeRow" hidden>
+
+              <label><input type="checkbox" id="active" name="active" checked /> Active customer</label>
+
+            </div>
+
+            <div class="admin-form__actions">
+
+              <button class="btn" type="submit">Save customer</button>
+
+              <button class="btn btn--ghost" type="button" id="cancelForm">Cancel</button>
+
+            </div>
+
+            <p class="fineprint form-status" id="formStatus" aria-live="polite"></p>
+
+          </form>
+
+        </section>
+
+      </div>
+
+    </div>
+
+  </main>
+
+
+
+  <!-- Day detail modal -->
+
+  <dialog class="day-modal" id="dayModal">
+
+    <div class="day-modal__header">
+
+      <h2 id="dayModalTitle">Scheduled pools</h2>
+
+      <button type="button" class="day-modal__close" id="closeDayModal" aria-label="Close">×</button>
+
+    </div>
+
+    <div id="dayModalBody"></div>
+
+  </dialog>
+
+
+
+  <script type="module" src="dashboard.js"></script>
+
+</body>
+
+</html>
+
+
