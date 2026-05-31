@@ -49,7 +49,16 @@ async function withAdmin(c, handler) {
 
 app.get("/api/health", async (c) => {
   await ensureAdminSeed(c.env.DB, c.env);
-  return json({ ok: true });
+  const row = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM admins").first();
+  return json({
+    ok: true,
+    env: {
+      adminEmail: !!c.env.ADMIN_EMAIL,
+      adminPassword: !!c.env.ADMIN_PASSWORD,
+      jwtSecret: !!c.env.JWT_SECRET,
+    },
+    adminCount: row?.n ?? 0,
+  });
 });
 
 app.post("/api/auth/login", async (c) => {
