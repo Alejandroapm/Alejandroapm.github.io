@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS admins (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   name TEXT,
+  business_name TEXT,
   role TEXT NOT NULL DEFAULT 'user',
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL

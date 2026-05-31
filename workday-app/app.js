@@ -35,6 +35,8 @@ function poolsLabel(n) {
   return `${n} ${n === 1 ? t("pool") : t("pools")}`;
 }
 
+const profile = { businessName: "MSG Pool Services" };
+
 const workdayUI = createWorkdayUI({
   api,
   getServerOrigin,
@@ -45,6 +47,7 @@ const workdayUI = createWorkdayUI({
   dayName,
   adminLocale,
   poolsLabel,
+  getBusinessName: () => profile.businessName,
   els: {
     body: document.getElementById("workdayBody"),
     jobModal: document.getElementById("jobModal"),
@@ -71,6 +74,7 @@ function showLogin() {
 function showApp(admin) {
   loginScreen.hidden = true;
   appScreen.hidden = false;
+  profile.businessName = admin.businessName || "MSG Pool Services";
   document.getElementById("appUserEmail").textContent = admin.email;
   workdayUI.init();
 }

@@ -63,6 +63,7 @@ export async function requireAdmin(req, env, db) {
     userId: admin.id,
     email: admin.email,
     name: admin.name || "",
+    businessName: admin.business_name || "",
     role,
     isSuper: role === "super",
   };

@@ -15,6 +15,7 @@ export function createWorkdayUI(deps) {
     dayName,
     adminLocale,
     poolsLabel,
+    getBusinessName = () => "MSG Pool Services",
     els,
   } = deps;
 
@@ -25,10 +26,13 @@ export function createWorkdayUI(deps) {
   let jobLang = "en";
   let jobState = { stopId: null, messagePhotos: [], messageText: "", completionPhotos: [] };
 
-  const COMPLETION_MSG = {
-    en: (name) => `Hi${name ? ` ${name}` : ""}, your pool service is complete for today. Everything looks great. Thank you! — MSG Pool Services`,
-    es: (name) => `Hola${name ? ` ${name}` : ""}, el servicio de su piscina ya quedó completo por hoy. Todo se ve muy bien. ¡Gracias! — MSG Pool Services`,
-  };
+  function completionText(lang, customerFirstName) {
+    const sender = getBusinessName();
+    if (lang === "es") {
+      return `Hola${customerFirstName ? ` ${customerFirstName}` : ""}, el servicio de su piscina ya quedó completo por hoy. Todo se ve muy bien. ¡Gracias! — ${sender}`;
+    }
+    return `Hi${customerFirstName ? ` ${customerFirstName}` : ""}, your pool service is complete for today. Everything looks great. Thank you! — ${sender}`;
+  }
 
   async function logMessage(entry) {
     try {
@@ -372,7 +376,7 @@ export function createWorkdayUI(deps) {
       <div class="job-section job-section--complete">
         <h3>${t("completeJobH")}</h3>
         <p class="fineprint">${t("completeBlurb")}</p>
-        <textarea id="jobDoneMsg" rows="3">${esc(COMPLETION_MSG[jobLang](firstName(stop.name)))}</textarea>
+        <textarea id="jobDoneMsg" rows="3">${esc(completionText(jobLang, firstName(stop.name)))}</textarea>
         ${langBtns()}
         <div class="job-photos">
           <label class="btn btn--ghost btn--small job-photo-add">
@@ -430,7 +434,7 @@ export function createWorkdayUI(deps) {
           x.classList.toggle("is-active", active);
           x.classList.toggle("btn--ghost", !active);
         });
-        document.getElementById("jobDoneMsg").value = COMPLETION_MSG[jobLang](firstName(stop.name));
+        document.getElementById("jobDoneMsg").value = completionText(jobLang, firstName(stop.name));
         document.getElementById("jobMsgPreview").hidden = true;
         document.getElementById("jobMsgShareBtn").hidden = true;
       })
@@ -618,11 +622,14 @@ export function createWorkdayUI(deps) {
     try {
       const res = await authFetch("/api/admin/workday/export.csv");
       if (!res.ok) throw new Error("Could not download work log.");
+      const disp = res.headers.get("Content-Disposition") || "";
+      const match = disp.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || `workday-log-${new Date().toISOString().slice(0, 10)}.csv`;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `workday-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();

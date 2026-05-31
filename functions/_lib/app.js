@@ -648,6 +648,7 @@ app.post("/api/admin/users", async (c) =>
         email: body.email,
         password: body.password,
         name: body.name,
+        businessName: body.businessName,
       });
       return json({ user: publicAdmin(user) }, 201);
     } catch (err) {
@@ -665,6 +666,7 @@ app.patch("/api/admin/users/:id", async (c) =>
     try {
       const user = await updateTeamUser(ctx.env.DB, id, {
         name: body.name,
+        businessName: body.businessName,
         password: body.password || undefined,
         active: body.active,
       });
@@ -774,11 +776,11 @@ app.post("/api/admin/workday/stop/:stopId/notes", async (c) =>
 
 app.get("/api/admin/workday/export.csv", async (c) =>
   withAdmin(c, async (ctx, auth) => {
-    const csv = await exportWorkdaysCsv(ctx.env.DB, auth);
+    const { csv, filename } = await exportWorkdaysCsv(ctx.env.DB, auth);
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="workday-log-${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   })

@@ -29,6 +29,7 @@ const workdayUI = createWorkdayUI({
   dayName,
   adminLocale,
   poolsLabel,
+  getBusinessName: () => admin.businessName || "MSG Pool Services",
   els: {
     body: document.getElementById("workdayBody"),
     jobModal: document.getElementById("jobModal"),
@@ -678,14 +679,12 @@ function renderTeamUser(u) {
   const statusTag = u.active
     ? `<span class="tag tag--mapped">${t("teamActive")}</span>`
     : `<span class="tag tag--skip">${t("teamRestricted")}</span>`;
-  const actions = u.isSuper ? "" : `
-    <div class="team-user-row__actions">
+  const memberActions = u.isSuper ? "" : `
       ${u.active
         ? `<button type="button" class="btn btn--ghost btn--small" data-restrict-user="${u.id}">${t("teamRestrict")}</button>`
         : `<button type="button" class="btn btn--ghost btn--small" data-restore-user="${u.id}">${t("teamRestore")}</button>`}
       <button type="button" class="btn btn--ghost btn--small" data-reset-pwd="${u.id}">${t("teamResetPwd")}</button>
-      <button type="button" class="btn btn--ghost btn--small btn--danger" data-delete-user="${u.id}">${t("teamDelete")}</button>
-    </div>`;
+      <button type="button" class="btn btn--ghost btn--small btn--danger" data-delete-user="${u.id}">${t("teamDelete")}</button>`;
   return `
     <article class="team-user-row card${u.active ? "" : " team-user-row--restricted"}">
       <div>
@@ -693,9 +692,13 @@ function renderTeamUser(u) {
         ${roleTag}
         ${statusTag}
         <p class="muted">${esc(u.email)}</p>
+        <p class="fineprint">${u.businessName ? esc(u.businessName) : `<span class="muted">${t("teamNoBusiness")}</span>`}</p>
         <p class="fineprint">${u.activeCustomers ?? 0} ${t("teamPools")}</p>
       </div>
-      ${actions}
+      <div class="team-user-row__actions">
+        <button type="button" class="btn btn--ghost btn--small" data-edit-business="${u.id}" data-business="${esc(u.businessName || "")}">${t("teamEditBusiness")}</button>
+        ${memberActions}
+      </div>
     </article>
   `;
 }
@@ -710,6 +713,25 @@ async function loadTeamUsers() {
     el.innerHTML = users.length
       ? users.map(renderTeamUser).join("")
       : `<p class="muted">${t("teamNoUsers")}</p>`;
+
+    el.querySelectorAll("[data-edit-business]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const businessName = prompt(t("teamBusinessPrompt"), btn.dataset.business || "");
+        if (businessName == null) return;
+        if (!businessName.trim()) {
+          alert(t("teamBusinessRequired"));
+          return;
+        }
+        await api(`/api/admin/users/${btn.dataset.editBusiness}`, {
+          method: "PATCH",
+          body: JSON.stringify({ businessName: businessName.trim() }),
+        });
+        if (Number(btn.dataset.editBusiness) === admin.id) {
+          admin.businessName = businessName.trim();
+        }
+        loadTeamUsers();
+      });
+    });
 
     el.querySelectorAll("[data-restrict-user]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -772,6 +794,7 @@ document.getElementById("teamAddForm")?.addEventListener("submit", async (e) => 
         name: form.name.value.trim(),
         email: form.email.value.trim(),
         password: form.password.value,
+        businessName: form.businessName.value.trim(),
       }),
     });
     form.reset();

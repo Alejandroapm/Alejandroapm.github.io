@@ -1,6 +1,6 @@
 import { milesBetween } from "./florida.js";
 import { buildOptimizedRoute } from "./routeBuilder.js";
-import { customersForDate, getRouteDepot, DAY_NAMES } from "./db.js";
+import { customersForDate, getRouteDepot, DAY_NAMES, findAdminById } from "./db.js";
 import { assertWorkdayAccess } from "./scope.js";
 
 function publicStop(s) {
@@ -273,55 +273,193 @@ function fmtET(ts) {
   }
 }
 
-/** Builds a per-stop CSV (one row per stop) with daily totals repeated per day. */
+function fmtETDate(ts) {
+  if (!ts) return "";
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(ts));
+  } catch {
+    return new Date(ts).toISOString().slice(0, 10);
+  }
+}
+
+function slugFilename(s) {
+  return String(s || "workday")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "workday";
+}
+
+function minutesBetween(start, end) {
+  if (!start || !end) return "";
+  return Math.max(0, Math.round((end - start) / 60000));
+}
+
+/**
+ * Tax-oriented work log for the signed-in team member only (never combined across users).
+ * Returns UTF-8 CSV with a header block, detail rows, and summary totals.
+ */
 export async function exportWorkdaysCsv(db, auth) {
-  const scope = auth.isSuper ? "" : " WHERE owner_id = ?";
-  const binds = auth.isSuper ? [] : [auth.userId];
+  const adminRow = await findAdminById(db, auth.userId);
+  const memberName = adminRow?.name || auth.name || "";
+  const businessName = adminRow?.business_name || "";
+  const memberEmail = adminRow?.email || auth.email || "";
+
   const { results: days } = await db
-    .prepare(`SELECT * FROM work_days${scope} ORDER BY started_at ASC`)
-    .bind(...binds)
+    .prepare(`SELECT * FROM work_days WHERE owner_id = ? ORDER BY started_at ASC, id ASC`)
+    .bind(auth.userId)
     .all();
 
-  const header = [
-    "Date", "Day", "Stop #", "Customer", "Address", "Status",
-    "Arrived (ET)", "Job start (ET)", "Job complete (ET)", "Job minutes",
-    "Miles to stop", "Day total miles", "Day start (ET)", "Day end (ET)", "Day minutes",
+  const generatedAt = fmtET(Date.now());
+  const periodStart = days?.length ? days[0].date : "";
+  const periodEnd = days?.length ? days[days.length - 1].date : "";
+
+  let totalMiles = 0;
+  let totalJobMinutes = 0;
+  let totalOnRoadMinutes = 0;
+  let totalCompleted = 0;
+  let totalSkipped = 0;
+  let totalWorkDays = days?.length || 0;
+
+  const metaRows = [
+    ["WorkDay Mileage and Service Log"],
+    ["Team member", memberName],
+    ["Business name", businessName],
+    ["Email", memberEmail],
+    ["Report generated (ET)", generatedAt],
+    ["Period start", periodStart],
+    ["Period end", periodEnd],
+    [],
+    ["Notes"],
+    ["Miles are straight-line GPS estimates between logged events (start, navigate, job, end)."],
+    ["Use with your tax preparer; verify the current IRS standard mileage rate for your tax year."],
+    [],
   ];
-  if (auth.isSuper) header.unshift("Owner ID");
-  const lines = [header.map(csvEscape).join(",")];
+
+  const header = [
+    "Service date",
+    "Day of week",
+    "Team member",
+    "Business name",
+    "Team email",
+    "Work day ID",
+    "Work day status",
+    "Stop #",
+    "Customer ID",
+    "Customer name",
+    "Customer phone",
+    "Service address",
+    "Stop latitude",
+    "Stop longitude",
+    "Stop status",
+    "Arrived (ET)",
+    "Job start (ET)",
+    "Job complete (ET)",
+    "Job duration (minutes)",
+    "Travel miles to stop",
+    "Technician job notes",
+    "Customer account notes",
+    "Day start (ET)",
+    "Day end (ET)",
+    "Day on-road (minutes)",
+    "Day total miles",
+    "Day stops completed",
+    "Day stops skipped",
+    "Day stops total",
+  ];
+
+  const dataRows = [];
 
   for (const w of days || []) {
     const d = new Date(`${w.date}T12:00:00`);
     const dayName = DAY_NAMES[d.getDay()] || "";
-    const dayMin = w.started_at && w.ended_at ? Math.round((w.ended_at - w.started_at) / 60000) : "";
-    const dayMiles = Number(w.total_miles || 0).toFixed(2);
+    const dayMin = minutesBetween(w.started_at, w.ended_at);
+    const dayMiles = Number(w.total_miles || 0);
+    totalMiles += dayMiles;
+    if (dayMin !== "") totalOnRoadMinutes += dayMin;
+
     const stops = await stopsFor(db, w.id);
-    const ownerPrefix = auth.isSuper ? [w.owner_id ?? ""] : [];
+    const completed = stops.filter((s) => s.status === "completed").length;
+    const skipped = stops.filter((s) => s.status === "skipped").length;
+    totalCompleted += completed;
+    totalSkipped += skipped;
 
     if (!stops.length) {
-      lines.push(
-        [...ownerPrefix, w.date, dayName, "", "", "", "no stops", "", "", "", "", "", dayMiles, fmtET(w.started_at), fmtET(w.ended_at), dayMin]
-          .map(csvEscape)
-          .join(",")
-      );
+      dataRows.push([
+        w.date, dayName, memberName, businessName, memberEmail,
+        w.id, w.status, "", "", "", "", "", "", "", "no stops",
+        "", "", "", "", "", "", "",
+        fmtET(w.started_at), fmtET(w.ended_at), dayMin, dayMiles.toFixed(2),
+        0, 0, 0,
+      ]);
       continue;
     }
 
     for (const s of stops) {
-      const jobMin = s.started_at && s.completed_at ? Math.round((s.completed_at - s.started_at) / 60000) : "";
-      lines.push(
-        [
-          ...ownerPrefix,
-          w.date, dayName, s.seq, s.customer_name, s.address, s.status,
-          fmtET(s.arrived_at), fmtET(s.started_at), fmtET(s.completed_at), jobMin,
-          s.miles_from_prev != null ? Number(s.miles_from_prev).toFixed(2) : "",
-          dayMiles, fmtET(w.started_at), fmtET(w.ended_at), dayMin,
-        ]
-          .map(csvEscape)
-          .join(",")
-      );
+      const jobMin = minutesBetween(s.started_at, s.completed_at);
+      if (jobMin !== "" && s.status === "completed") totalJobMinutes += jobMin;
+      dataRows.push([
+        w.date,
+        dayName,
+        memberName,
+        businessName,
+        memberEmail,
+        w.id,
+        w.status,
+        s.seq,
+        s.customer_id ?? "",
+        s.customer_name || "",
+        s.phone || "",
+        s.address || "",
+        s.lat != null ? Number(s.lat).toFixed(6) : "",
+        s.lng != null ? Number(s.lng).toFixed(6) : "",
+        s.status,
+        fmtET(s.arrived_at),
+        fmtET(s.started_at),
+        fmtET(s.completed_at),
+        jobMin,
+        s.miles_from_prev != null ? Number(s.miles_from_prev).toFixed(2) : "",
+        s.notes || "",
+        s.customer_notes || "",
+        fmtET(w.started_at),
+        fmtET(w.ended_at),
+        dayMin,
+        dayMiles.toFixed(2),
+        completed,
+        skipped,
+        stops.length,
+      ]);
     }
   }
 
-  return lines.join("\n");
+  const summaryRows = [
+    [],
+    ["SUMMARY TOTALS"],
+    ["Total work days logged", totalWorkDays],
+    ["Total stops completed", totalCompleted],
+    ["Total stops skipped", totalSkipped],
+    ["Total job minutes (completed stops)", totalJobMinutes],
+    ["Total on-road minutes (day start to end)", totalOnRoadMinutes],
+    ["Total miles logged", totalMiles.toFixed(2)],
+  ];
+
+  const lines = [
+    ...metaRows.map((row) => row.map(csvEscape).join(",")),
+    header.map(csvEscape).join(","),
+    ...dataRows.map((row) => row.map(csvEscape).join(",")),
+    ...summaryRows.map((row) => row.map(csvEscape).join(",")),
+  ];
+
+  const label = businessName || memberName || memberEmail.split("@")[0] || "workday";
+  const range =
+    periodStart && periodEnd && periodStart !== periodEnd
+      ? `${periodStart}-to-${periodEnd}`
+      : periodStart || fmtETDate(Date.now());
+  const filename = `${slugFilename(label)}-work-log-${range}.csv`;
+
+  return { csv: `\uFEFF${lines.join("\n")}`, filename };
 }

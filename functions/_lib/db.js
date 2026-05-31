@@ -13,6 +13,7 @@ export function publicAdmin(row) {
     id: row.id,
     email: row.email,
     name: row.name || "",
+    businessName: row.business_name || "",
     role,
     isSuper: role === "super",
     active: row.active == null ? true : !!row.active,
@@ -234,6 +235,7 @@ async function dedupeActiveWorkdays(db) {
 export async function runMigrations(db, env) {
   await addColumn(db, "admins", "role", "TEXT NOT NULL DEFAULT 'user'");
   await addColumn(db, "admins", "active", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "admins", "business_name", "TEXT");
   await addColumn(db, "customers", "owner_id", "INTEGER");
   await addColumn(db, "work_days", "owner_id", "INTEGER");
   await addColumn(db, "message_logs", "owner_id", "INTEGER");
@@ -533,20 +535,22 @@ export async function listTeamUsers(db) {
   }));
 }
 
-export async function createTeamUser(db, { email, password, name }) {
+export async function createTeamUser(db, { email, password, name, businessName }) {
   const normalized = String(email || "").trim().toLowerCase();
   const pwd = String(password || "");
+  const biz = String(businessName || "").trim();
   if (!normalized || !pwd) throw new Error("Email and password are required.");
+  if (!biz) throw new Error("Business name is required.");
   if (await findAdminByEmail(db, normalized)) throw new Error("An account with that email already exists.");
   const hash = bcrypt.hashSync(pwd, BCRYPT_COST);
   const res = await db.prepare(`
-    INSERT INTO admins (email, password_hash, name, role, active, created_at)
-    VALUES (?, ?, ?, 'user', 1, ?)
-  `).bind(normalized, hash, String(name || "").trim(), Date.now()).run();
+    INSERT INTO admins (email, password_hash, name, business_name, role, active, created_at)
+    VALUES (?, ?, ?, ?, 'user', 1, ?)
+  `).bind(normalized, hash, String(name || "").trim(), biz, Date.now()).run();
   return findAdminById(db, res.meta.last_row_id);
 }
 
-export async function updateTeamUser(db, id, { name, password, active }) {
+export async function updateTeamUser(db, id, { name, businessName, password, active }) {
   const user = await findAdminById(db, id);
   if (!user) return null;
   if (user.role === "super" && active === false) throw new Error("Cannot restrict the super account.");
@@ -556,6 +560,12 @@ export async function updateTeamUser(db, id, { name, password, active }) {
   if (name !== undefined) {
     fields.push("name = ?");
     binds.push(String(name || "").trim());
+  }
+  if (businessName !== undefined) {
+    const biz = String(businessName || "").trim();
+    if (!biz) throw new Error("Business name is required.");
+    fields.push("business_name = ?");
+    binds.push(biz);
   }
   if (password) {
     fields.push("password_hash = ?");
