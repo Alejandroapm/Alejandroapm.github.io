@@ -550,7 +550,7 @@ export async function createTeamUser(db, { email, password, name, businessName }
   return findAdminById(db, res.meta.last_row_id);
 }
 
-export async function updateTeamUser(db, id, { name, businessName, password, active }) {
+export async function updateTeamUser(db, id, { name, email, businessName, password, active }) {
   const user = await findAdminById(db, id);
   if (!user) return null;
   if (user.role === "super" && active === false) throw new Error("Cannot restrict the super account.");
@@ -570,6 +570,14 @@ export async function updateTeamUser(db, id, { name, businessName, password, act
   if (password) {
     fields.push("password_hash = ?");
     binds.push(bcrypt.hashSync(String(password), BCRYPT_COST));
+  }
+  if (email !== undefined) {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized) throw new Error("Email is required.");
+    const conflict = await findAdminByEmail(db, normalized);
+    if (conflict && conflict.id !== id) throw new Error("An account with that email already exists.");
+    fields.push("email = ?");
+    binds.push(normalized);
   }
   if (active !== undefined && user.role !== "super") {
     fields.push("active = ?");

@@ -408,6 +408,16 @@
 
             </div>
 
+            <div class="form-row" id="ownerRow" hidden>
+
+              <label for="customerOwner" data-i18n="fOwner">Route operator *</label>
+
+              <select id="customerOwner" name="customerOwner" required></select>
+
+              <p class="fineprint" data-i18n="fOwnerHint">Which team member services this pool on their route.</p>
+
+            </div>
+
             <div class="form-row" id="activeRow" hidden>
 
               <label><input type="checkbox" id="active" name="active" checked /> <span data-i18n="fActive">Active customer</span></label>
@@ -651,6 +661,68 @@
     </div>
 
     <div id="dayModalBody"></div>
+
+  </dialog>
+
+  <!-- Edit team member -->
+
+  <dialog class="day-modal" id="teamEditModal">
+
+    <div class="day-modal__header">
+
+      <h2 data-i18n="teamEditTitle">Edit team account</h2>
+
+      <button type="button" class="day-modal__close" id="closeTeamEditModal" aria-label="Close">×</button>
+
+    </div>
+
+    <form id="teamEditForm" class="day-modal__body">
+
+      <input type="hidden" id="teamEditUserId" name="userId" />
+
+      <div class="form-row">
+
+        <label for="teamEditName" data-i18n="teamName">Name</label>
+
+        <input id="teamEditName" name="name" required />
+
+      </div>
+
+      <div class="form-row">
+
+        <label for="teamEditEmail" data-i18n="loginEmail">Email</label>
+
+        <input id="teamEditEmail" name="email" type="email" required autocomplete="off" />
+
+      </div>
+
+      <div class="form-row">
+
+        <label for="teamEditBusiness" data-i18n="teamBusinessName">Business name</label>
+
+        <input id="teamEditBusiness" name="businessName" required />
+
+      </div>
+
+      <div class="form-row">
+
+        <label for="teamEditPassword" data-i18n="teamNewPassword">New password</label>
+
+        <input id="teamEditPassword" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Leave blank to keep current" data-i18n-ph="teamNewPasswordPh" />
+
+      </div>
+
+      <div class="admin-form__actions">
+
+        <button class="btn btn--small" type="submit" data-i18n="save">Save</button>
+
+        <button class="btn btn--ghost btn--small" type="button" id="cancelTeamEdit" data-i18n="cancel">Cancel</button>
+
+      </div>
+
+      <p class="fineprint form-status" id="teamEditStatus" aria-live="polite"></p>
+
+    </form>
 
   </dialog>
 

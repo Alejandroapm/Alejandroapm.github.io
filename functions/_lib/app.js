@@ -289,12 +289,19 @@ app.put("/api/admin/customers/:id", async (c) =>
       addr.street !== existing.street || addr.city !== existing.city ||
       addr.state !== existing.state || addr.zip !== existing.zip;
 
+    let ownerId = existing.owner_id;
+    if (auth.isSuper && body.assignToUserId !== undefined) {
+      const assignee = await findAdminById(ctx.env.DB, Number(body.assignToUserId));
+      if (!assignee || !assignee.active) return json({ error: "Invalid team member." }, 400);
+      ownerId = assignee.id;
+    }
+
     await ctx.env.DB.prepare(`
       UPDATE customers SET
         name = ?, phone = ?, email = ?,
         address = ?, street = ?, city = ?, state = ?, zip = ?,
         service_day_of_week = ?, pool_type = ?, monthly_rate = ?,
-        notes = ?, active = ?, updated_at = ?,
+        notes = ?, active = ?, owner_id = ?, updated_at = ?,
         lat = CASE WHEN ? THEN NULL ELSE lat END,
         lng = CASE WHEN ? THEN NULL ELSE lng END
       WHERE id = ?
@@ -308,6 +315,7 @@ app.put("/api/admin/customers/:id", async (c) =>
       body.monthlyRate !== undefined ? (body.monthlyRate ? Number(body.monthlyRate) : null) : existing.monthly_rate,
       String(body.notes ?? existing.notes ?? "").trim(),
       body.active !== undefined ? (body.active ? 1 : 0) : existing.active,
+      ownerId,
       Date.now(),
       addressChanged ? 1 : 0, addressChanged ? 1 : 0, id
     ).run();
@@ -666,6 +674,7 @@ app.patch("/api/admin/users/:id", async (c) =>
     try {
       const user = await updateTeamUser(ctx.env.DB, id, {
         name: body.name,
+        email: body.email,
         businessName: body.businessName,
         password: body.password || undefined,
         active: body.active,

@@ -53,9 +53,13 @@ function refreshCurrentView() {
 }
 
 function ownerBadge(c) {
-  if (!admin.isSuper || !c.ownerName) return "";
-  return `<span class="tag tag--owner">${t("ownerBadge")}: ${esc(c.ownerName)}</span>`;
+  if (!admin.isSuper) return "";
+  const label = c.ownerName || c.ownerEmail || t("ownerUnknown");
+  return `<span class="tag tag--owner">${t("ownerBadge")}: ${esc(label)}</span>`;
 }
+
+let teamUsersCache = [];
+let teamOwnerOptionsLoaded = false;
 
 onLangChange(() => {
   loadStats();
@@ -243,6 +247,9 @@ customerForm?.addEventListener("submit", async (e) => {
   };
 
   if (id) body.active = customerForm.active.checked;
+  if (admin.isSuper) {
+    body.assignToUserId = Number(document.getElementById("customerOwner").value);
+  }
 
   try {
     setStatus(formStatus, t("saving"));
@@ -289,16 +296,45 @@ async function loadRouteStartForm() {
   form.zip.value = routeStart.zip || "";
 }
 
-function resetForm() {
+async function ensureTeamOwnerSelect() {
+  const row = document.getElementById("ownerRow");
+  const sel = document.getElementById("customerOwner");
+  if (!admin.isSuper || !row || !sel) return;
+  row.hidden = false;
+  if (!teamOwnerOptionsLoaded) {
+    const { users } = await api("/api/admin/users");
+    teamUsersCache = users;
+    teamOwnerOptionsLoaded = true;
+  }
+  const keep = sel.value;
+  sel.innerHTML = teamUsersCache
+    .filter((u) => u.active)
+    .map((u) => {
+      const label = u.name || u.email;
+      const biz = u.businessName ? ` · ${u.businessName}` : "";
+      return `<option value="${u.id}">${esc(`${label}${biz}`)}</option>`;
+    })
+    .join("");
+  if (keep && sel.querySelector(`option[value="${keep}"]`)) sel.value = keep;
+}
+
+async function resetForm() {
   customerForm.reset();
   document.getElementById("customerId").value = "";
   document.getElementById("formTitle").textContent = t("addTitle");
   document.getElementById("activeRow").hidden = true;
   document.getElementById("state").value = "FL";
   setStatus(formStatus, "");
+  const ownerRow = document.getElementById("ownerRow");
+  if (admin.isSuper && ownerRow) {
+    await ensureTeamOwnerSelect();
+    document.getElementById("customerOwner").value = String(admin.id);
+  } else if (ownerRow) {
+    ownerRow.hidden = true;
+  }
 }
 
-function editCustomer(c) {
+async function editCustomer(c) {
   switchView("add");
   document.getElementById("formTitle").textContent = t("editTitle");
   document.getElementById("customerId").value = c.id;
@@ -315,6 +351,10 @@ function editCustomer(c) {
   customerForm.notes.value = c.notes || "";
   customerForm.active.checked = c.active;
   document.getElementById("activeRow").hidden = false;
+  if (admin.isSuper) {
+    await ensureTeamOwnerSelect();
+    document.getElementById("customerOwner").value = String(c.ownerId ?? admin.id);
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -696,7 +736,7 @@ function renderTeamUser(u) {
         <p class="fineprint">${u.activeCustomers ?? 0} ${t("teamPools")}</p>
       </div>
       <div class="team-user-row__actions">
-        <button type="button" class="btn btn--ghost btn--small" data-edit-business="${u.id}" data-business="${esc(u.businessName || "")}">${t("teamEditBusiness")}</button>
+        <button type="button" class="btn btn--ghost btn--small" data-edit-user="${u.id}">${t("teamEditAccount")}</button>
         ${memberActions}
       </div>
     </article>
@@ -710,27 +750,13 @@ async function loadTeamUsers() {
   el.innerHTML = `<p class="muted">${t("loading")}</p>`;
   try {
     const { users } = await api("/api/admin/users");
+    teamUsersCache = users;
     el.innerHTML = users.length
       ? users.map(renderTeamUser).join("")
       : `<p class="muted">${t("teamNoUsers")}</p>`;
 
-    el.querySelectorAll("[data-edit-business]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const businessName = prompt(t("teamBusinessPrompt"), btn.dataset.business || "");
-        if (businessName == null) return;
-        if (!businessName.trim()) {
-          alert(t("teamBusinessRequired"));
-          return;
-        }
-        await api(`/api/admin/users/${btn.dataset.editBusiness}`, {
-          method: "PATCH",
-          body: JSON.stringify({ businessName: businessName.trim() }),
-        });
-        if (Number(btn.dataset.editBusiness) === admin.id) {
-          admin.businessName = businessName.trim();
-        }
-        loadTeamUsers();
-      });
+    el.querySelectorAll("[data-edit-user]").forEach((btn) => {
+      btn.addEventListener("click", () => openTeamEditModal(Number(btn.dataset.editUser)));
     });
 
     el.querySelectorAll("[data-restrict-user]").forEach((btn) => {
@@ -740,6 +766,7 @@ async function loadTeamUsers() {
           method: "PATCH",
           body: JSON.stringify({ active: false }),
         });
+        teamOwnerOptionsLoaded = false;
         loadTeamUsers();
       });
     });
@@ -750,6 +777,7 @@ async function loadTeamUsers() {
           method: "PATCH",
           body: JSON.stringify({ active: true }),
         });
+        teamOwnerOptionsLoaded = false;
         loadTeamUsers();
       });
     });
@@ -774,6 +802,7 @@ async function loadTeamUsers() {
       btn.addEventListener("click", async () => {
         if (!confirm(t("teamDeleteConfirm"))) return;
         await api(`/api/admin/users/${btn.dataset.deleteUser}`, { method: "DELETE" });
+        teamOwnerOptionsLoaded = false;
         loadTeamUsers();
       });
     });
@@ -798,10 +827,64 @@ document.getElementById("teamAddForm")?.addEventListener("submit", async (e) => 
       }),
     });
     form.reset();
+    teamOwnerOptionsLoaded = false;
     setStatus(statusEl, t("teamCreated"), "success");
     loadTeamUsers();
   } catch (err) {
     setStatus(statusEl, err.message, "error");
+  }
+});
+
+const teamEditModal = document.getElementById("teamEditModal");
+const teamEditForm = document.getElementById("teamEditForm");
+const teamEditStatus = document.getElementById("teamEditStatus");
+
+function openTeamEditModal(userId) {
+  const u = teamUsersCache.find((x) => x.id === userId);
+  if (!u || !teamEditForm || !teamEditModal) return;
+  teamEditForm.userId.value = String(u.id);
+  teamEditForm.name.value = u.name || "";
+  teamEditForm.email.value = u.email || "";
+  teamEditForm.businessName.value = u.businessName || "";
+  teamEditForm.password.value = "";
+  setStatus(teamEditStatus, "");
+  teamEditModal.showModal();
+}
+
+document.getElementById("closeTeamEditModal")?.addEventListener("click", () => teamEditModal?.close());
+document.getElementById("cancelTeamEdit")?.addEventListener("click", () => teamEditModal?.close());
+teamEditModal?.addEventListener("click", (e) => {
+  if (e.target === teamEditModal) teamEditModal.close();
+});
+
+teamEditForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = Number(teamEditForm.userId.value);
+  const password = teamEditForm.password.value;
+  if (password && password.length < 8) {
+    setStatus(teamEditStatus, t("teamPwdShort"), "error");
+    return;
+  }
+  try {
+    setStatus(teamEditStatus, t("saving"));
+    const body = {
+      name: teamEditForm.name.value.trim(),
+      email: teamEditForm.email.value.trim(),
+      businessName: teamEditForm.businessName.value.trim(),
+    };
+    if (password) body.password = password;
+    await api(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    if (id === admin.id) {
+      admin.name = body.name;
+      admin.email = body.email;
+      admin.businessName = body.businessName;
+      document.getElementById("adminEmail").textContent = body.email;
+    }
+    teamOwnerOptionsLoaded = false;
+    teamEditModal.close();
+    loadTeamUsers();
+  } catch (err) {
+    setStatus(teamEditStatus, err.message, "error");
   }
 });
 
