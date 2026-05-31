@@ -2,6 +2,8 @@
  * Shared WorkDay UI — used by the admin dashboard and the standalone WorkDay iPhone app.
  * Both clients talk to the same /api/admin/workday/* endpoints, so changes sync automatically.
  */
+import { authFetch } from "./api-client.js";
+
 export function createWorkdayUI(deps) {
   const {
     api,
@@ -611,13 +613,22 @@ export function createWorkdayUI(deps) {
     document.getElementById("newDayBtn").addEventListener("click", () => { workday = null; renderWorkday(); });
   }
 
-  function downloadWorkLog() {
-    const a = document.createElement("a");
-    a.href = `${getServerOrigin()}/api/admin/workday/export.csv`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  async function downloadWorkLog() {
+    try {
+      const res = await authFetch("/api/admin/workday/export.csv");
+      if (!res.ok) throw new Error("Could not download work log.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `workday-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   function bindModals() {

@@ -1,6 +1,7 @@
 /** Ports used by Live Server and other static dev servers (not the Node API). */
 const STATIC_DEV_PORTS = new Set(["5500", "5501", "5502", "8080", "8888", "5173"]);
 const API_TIMEOUT_MS = 12000;
+const AUTH_TOKEN_KEY = "msg_admin_auth_token";
 
 function readMetaApiOrigin() {
   const meta = document.querySelector('meta[name="msg-api-origin"]');
@@ -29,6 +30,30 @@ export function getServerOrigin() {
 }
 
 const API = getServerOrigin();
+
+/** Persist JWT for clients where HttpOnly cookies are unreliable (e.g. iPhone PWA). */
+export function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY) || null;
+}
+
+export function setAuthToken(token, remember = false) {
+  clearAuthToken();
+  if (!token) return;
+  if (remember) localStorage.setItem(AUTH_TOKEN_KEY, token);
+  else sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
 
 /** Full URL for an admin page — use when redirecting between login and dashboard. */
 export function adminPageUrl(path = "/admin/login.html") {
@@ -80,7 +105,10 @@ function apiMissingMessage() {
 
 export async function isApiAvailable() {
   try {
-    const res = await fetchWithTimeout(`${API}/api/health`, { credentials: "include" });
+    const res = await fetchWithTimeout(`${API}/api/health`, {
+      credentials: "include",
+      headers: authHeaders(),
+    });
     return res.ok;
   } catch {
     return false;
@@ -93,10 +121,10 @@ export async function api(path, options = {}) {
     res = await fetchWithTimeout(`${API}${path}`, {
       credentials: "include",
       ...options,
-      headers: {
+      headers: authHeaders({
         "Content-Type": "application/json",
         ...options.headers,
-      },
+      }),
     });
   } catch (err) {
     if (err.message?.includes("not responding")) throw err;
@@ -111,6 +139,7 @@ export async function api(path, options = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
+      clearAuthToken();
       throw new Error(data.error || "Please sign in.");
     }
     if (res.status === 404 || res.status === 405) {
@@ -157,7 +186,17 @@ export async function requireAdmin() {
     const { admin } = await api("/api/auth/me");
     return admin;
   } catch {
+    clearAuthToken();
     window.location.href = adminPageUrl("/admin/login.html");
     return null;
   }
+}
+
+/** Authenticated fetch for downloads and other non-JSON responses. */
+export async function authFetch(path, options = {}) {
+  return fetchWithTimeout(`${API}${path}`, {
+    credentials: "include",
+    ...options,
+    headers: authHeaders(options.headers || {}),
+  });
 }

@@ -208,6 +208,28 @@ async function addColumn(db, table, column, definition) {
   }
 }
 
+/** End duplicate active work days so the per-owner unique index can be created. */
+async function dedupeActiveWorkdays(db) {
+  const { results } = await db
+    .prepare(`
+      SELECT id, owner_id FROM work_days
+      WHERE status = 'active' AND owner_id IS NOT NULL
+      ORDER BY owner_id ASC, started_at DESC, id DESC
+    `)
+    .all();
+  const keepOwner = new Set();
+  for (const row of results || []) {
+    if (keepOwner.has(row.owner_id)) {
+      await db
+        .prepare("UPDATE work_days SET status = 'ended', ended_at = ? WHERE id = ?")
+        .bind(Date.now(), row.id)
+        .run();
+    } else {
+      keepOwner.add(row.owner_id);
+    }
+  }
+}
+
 /** Adds multi-user columns and backfills existing rows to the super admin. */
 export async function runMigrations(db, env) {
   await addColumn(db, "admins", "role", "TEXT NOT NULL DEFAULT 'user'");
@@ -218,10 +240,15 @@ export async function runMigrations(db, env) {
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_customers_owner ON customers(owner_id)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_work_days_owner ON work_days(owner_id)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_message_logs_owner ON message_logs(owner_id)").run();
-  await db.prepare(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_work_days_one_active_per_owner
-    ON work_days(owner_id) WHERE status = 'active'
-  `).run();
+  await dedupeActiveWorkdays(db);
+  try {
+    await db.prepare(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_work_days_one_active_per_owner
+      ON work_days(owner_id) WHERE status = 'active'
+    `).run();
+  } catch {
+    // Existing duplicates or a partial index conflict must not block login.
+  }
 
   const superEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
   if (superEmail) {

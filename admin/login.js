@@ -1,4 +1,4 @@
-import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer, isApiAvailable } from "../js/api-client.js";
+import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer, isApiAvailable, setAuthToken, clearAuthToken } from "../js/api-client.js";
 import { t, initLangToggle } from "../js/admin-i18n.js";
 
 initLangToggle();
@@ -46,10 +46,11 @@ form?.addEventListener("submit", async (e) => {
 
   try {
     setStatus(statusEl, t("signingIn"));
-    await api("/api/auth/login", {
+    const data = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, rememberDevice }),
     });
+    if (data.token) setAuthToken(data.token, rememberDevice);
 
     form.password.value = "";
 

@@ -1,4 +1,4 @@
-import { api, requireAdmin, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin } from "../js/api-client.js";
+import { api, requireAdmin, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin, clearAuthToken } from "../js/api-client.js";
 import { loadLeaflet, createMap, drawRoute, drawCustomers, refreshMap } from "../js/admin-maps.js";
 import { attachAddressAutocomplete, pickedCoordsPayload, clearPickedCoords } from "../js/address-autocomplete.js";
 import { t, days as i18nDays, daysShort as i18nDaysShort, dayName, adminLocale, initLangToggle, onLangChange } from "../js/admin-i18n.js";
@@ -91,7 +91,12 @@ const routeDateInput = document.getElementById("routeDate");
 routeDateInput.value = fmtDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
 
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await api("/api/auth/logout", { method: "POST" });
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch {
+    /* still clear local session below */
+  }
+  clearAuthToken();
   window.location.href = adminPageUrl("/admin/login.html");
 });
 

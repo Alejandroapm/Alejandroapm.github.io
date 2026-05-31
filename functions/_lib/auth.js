@@ -37,6 +37,11 @@ export function clearAuthCookie(secure = true) {
 }
 
 export function getTokenFromRequest(req) {
+  const auth = req.headers.get("Authorization");
+  if (auth?.startsWith("Bearer ")) {
+    const bearer = auth.slice(7).trim();
+    if (bearer) return bearer;
+  }
   const cookie = req.headers.get("Cookie") || "";
   const match = cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
   return match?.[1] || null;

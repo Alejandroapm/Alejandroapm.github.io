@@ -1,4 +1,4 @@
-import { api, setStatus, fmtDate, esc, getServerOrigin } from "../js/api-client.js";
+import { api, setStatus, fmtDate, esc, getServerOrigin, isApiAvailable, setAuthToken, clearAuthToken } from "../js/api-client.js";
 import { t, dayName, adminLocale, onLangChange, setAdminLang, getAdminLang, applyStaticI18n } from "../js/admin-i18n.js";
 import { createWorkdayUI } from "../js/workday-ui.js";
 
@@ -13,6 +13,7 @@ const loginScreen = document.getElementById("loginScreen");
 const appScreen = document.getElementById("appScreen");
 const loginForm = document.getElementById("loginForm");
 const loginStatus = document.getElementById("loginStatus");
+const loginSubmitBtn = loginForm?.querySelector('button[type="submit"]');
 
 function initWorkdayAppLang() {
   const sync = (lang) => {
@@ -82,10 +83,11 @@ loginForm?.addEventListener("submit", async (e) => {
 
   try {
     setStatus(loginStatus, t("signingIn"));
-    await api("/api/auth/login", {
+    const data = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, rememberDevice }),
     });
+    if (data.token) setAuthToken(data.token, rememberDevice || true);
     loginForm.password.value = "";
 
     if (rememberDevice) {
@@ -96,7 +98,7 @@ loginForm?.addEventListener("submit", async (e) => {
       localStorage.removeItem(REMEMBER_DEVICE_KEY);
     }
 
-    showApp({ email });
+    showApp(data.admin || { email });
   } catch (err) {
     loginForm.password.value = "";
     setStatus(loginStatus, err.message, "error");
@@ -104,16 +106,33 @@ loginForm?.addEventListener("submit", async (e) => {
 });
 
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await api("/api/auth/logout", { method: "POST" });
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch {
+    /* still clear local session below */
+  }
+  clearAuthToken();
   showLogin();
 });
 
 (async function boot() {
+  const apiUp = await isApiAvailable();
+  if (!apiUp) {
+    setStatus(
+      loginStatus,
+      "Admin login is not available here. Open WorkDay from your Cloudflare admin site (not GitHub Pages). See Install WorkDay in the admin dashboard.",
+      "error"
+    );
+    if (loginSubmitBtn) loginSubmitBtn.disabled = true;
+    return;
+  }
+
   try {
     const { admin } = await api("/api/auth/me");
     if (admin) showApp(admin);
     else showLogin();
   } catch {
+    clearAuthToken();
     showLogin();
   }
 })();

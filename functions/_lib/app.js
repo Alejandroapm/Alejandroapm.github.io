@@ -52,7 +52,11 @@ import { milesBetween } from "./florida.js";
 
 const app = new Hono();
 
-app.use("/api/*", cors({ origin: (origin) => origin || "*", credentials: true }));
+app.use("/api/*", cors({
+  origin: (origin) => origin || "*",
+  credentials: true,
+  allowHeaders: ["Content-Type", "Authorization"],
+}));
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -181,7 +185,7 @@ app.post("/api/auth/login", async (c) => {
   }, rememberDevice);
   const secure = new URL(c.req.url).protocol === "https:";
   return json(
-    { ok: true, admin: publicAdmin(admin) },
+    { ok: true, admin: publicAdmin(admin), token },
     200,
     { "Set-Cookie": setAuthCookie(token, rememberDevice, secure) }
   );
