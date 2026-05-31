@@ -12,22 +12,11 @@ if (isStaticDevServer()) {
 }
 
 if (serverNotice) {
-  serverNotice.innerHTML = `Admin panel runs at <a href="${getServerOrigin()}/admin/">${getServerOrigin()}/admin/</a>. Keep the server running with <code>cd server && npm start</code>.`;
-}
-
-try {
-  await api("/api/health");
-} catch (err) {
-  setStatus(statusEl, err.message, "error");
-}
-
-try {
-  const { admin } = await api("/api/auth/me");
-  if (admin) {
-    window.location.replace(adminPageUrl("/admin/index.html"));
+  if (isStaticDevServer() || window.location.hostname === "localhost") {
+    serverNotice.innerHTML = `Admin panel runs at <a href="${getServerOrigin()}/admin/">${getServerOrigin()}/admin/</a>. Keep the server running with <code>cd server && npm start</code>.`;
+  } else {
+    serverNotice.textContent = "Admin login requires the Node.js server deployed with this website.";
   }
-} catch {
-  /* not signed in */
 }
 
 const savedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY);
@@ -68,3 +57,15 @@ form?.addEventListener("submit", async (e) => {
     setStatus(statusEl, err.message, "error");
   }
 });
+
+(async function checkExistingSession() {
+  try {
+    await api("/api/health");
+    const { admin } = await api("/api/auth/me");
+    if (admin) window.location.replace(adminPageUrl("/admin/index.html"));
+  } catch (err) {
+    if (statusEl && !statusEl.textContent) {
+      setStatus(statusEl, err.message, "error");
+    }
+  }
+})();

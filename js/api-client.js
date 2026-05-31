@@ -1,22 +1,28 @@
 /** Ports used by Live Server and other static dev servers (not the Node API). */
 const STATIC_DEV_PORTS = new Set(["5500", "5501", "5502", "8080", "8888", "5173"]);
+const API_TIMEOUT_MS = 12000;
 
 function readMetaApiOrigin() {
   const meta = document.querySelector('meta[name="msg-api-origin"]');
   return meta?.content?.trim().replace(/\/$/, "") || null;
 }
 
-/** Origin where the Node.js API is served (usually http://localhost:3000). */
+function isLocalDevHost(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+/** Origin where the Node.js API is served. */
 export function getServerOrigin() {
   const meta = readMetaApiOrigin();
   if (meta) return meta;
 
   const { protocol, hostname, port, origin } = window.location;
 
-  if (port === "3000") return origin;
-
-  if (!port || STATIC_DEV_PORTS.has(port)) {
-    return `${protocol}//${hostname}:3000`;
+  if (isLocalDevHost(hostname)) {
+    if (port === "3000") return origin;
+    if (!port || STATIC_DEV_PORTS.has(port)) {
+      return `${protocol}//${hostname}:3000`;
+    }
   }
 
   return origin;
@@ -24,21 +30,41 @@ export function getServerOrigin() {
 
 const API = getServerOrigin();
 
-/** Full URL for an admin page -use when redirecting between login and dashboard. */
+/** Full URL for an admin page — use when redirecting between login and dashboard. */
 export function adminPageUrl(path = "/admin/login.html") {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   if (window.location.origin === getServerOrigin()) return normalized;
   return `${getServerOrigin()}${normalized}`;
 }
 
+/** True when viewing static files locally (Live Server) instead of the Node app. */
 export function isStaticDevServer() {
+  if (!isLocalDevHost(window.location.hostname)) return false;
   return window.location.origin !== getServerOrigin();
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(
+        "Admin server is not responding. Make sure the Node server is running and deployed with your site."
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function api(path, options = {}) {
   let res;
   try {
-    res = await fetch(`${API}${path}`, {
+    res = await fetchWithTimeout(`${API}${path}`, {
       credentials: "include",
       ...options,
       headers: {
@@ -46,11 +72,12 @@ export async function api(path, options = {}) {
         ...options.headers,
       },
     });
-  } catch {
+  } catch (err) {
+    if (err.message?.includes("not responding")) throw err;
     throw new Error(
       isStaticDevServer()
-        ? `Cannot reach the admin server at ${getServerOrigin()}. Open a terminal, run cd server && npm start, then open ${getServerOrigin()}/admin/`
-        : "Cannot reach the admin server. Run cd server && npm start in the project folder."
+        ? `Cannot reach the admin server at ${getServerOrigin()}. Run cd server && npm start, then open ${getServerOrigin()}/admin/`
+        : "Cannot reach the admin server. Deploy the Node server with your site, or contact your host."
     );
   }
 
@@ -59,7 +86,7 @@ export async function api(path, options = {}) {
   if (!res.ok) {
     if (res.status === 405) {
       throw new Error(
-        `Admin login needs the Node server, not Live Server. Run cd server && npm start, then open ${getServerOrigin()}/admin/`
+        "Admin login requires the Node server (not static hosting alone). Deploy the server folder with your site."
       );
     }
     throw new Error(data.error || `Error ${res.status}`);

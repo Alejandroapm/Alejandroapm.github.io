@@ -278,7 +278,7 @@ const dict = {
 
   es: {
     topBadge: "Limpieza Semanal",
-    topArea: "Ocoee • Kissimmee • St. Cloud • FL Central",
+    topArea: "Ocoee • Kissimmee • St. Cloud • Central FL",
     topQuote: "Pedir Cotización",
     tagline: "Servicio de Limpieza de Piscinas y Jacuzzi",
     menu: "Menú",
@@ -656,13 +656,16 @@ if (form) {
   });
 }
 
-// Live Server only serves static files -admin login needs the Node server on port 3000.
+// Live Server only serves static files — admin login needs the Node server on port 3000 (local dev only).
 (function linkAdminToNodeServer() {
   const link = document.querySelector('a[href="admin/login.html"]');
   if (!link) return;
+  const host = window.location.hostname;
+  const isLocal = host === "localhost" || host === "127.0.0.1";
+  if (!isLocal) return;
   const staticPorts = new Set(["5500", "5501", "5502", "8080", "8888", "5173"]);
   const port = window.location.port;
   if (!port || staticPorts.has(port)) {
-    link.href = `${window.location.protocol}//${window.location.hostname}:3000/admin/login.html`;
+    link.href = `${window.location.protocol}//${host}:3000/admin/login.html`;
   }
 })();
