@@ -34,9 +34,17 @@
 
       <div class="admin-topbar__actions">
 
-        <a href="../index.html" class="btn btn--ghost btn--small">View site</a>
+        <div class="lang-toggle" role="group" aria-label="Language toggle">
 
-        <button type="button" class="btn btn--ghost btn--small" id="logoutBtn">Log out</button>
+          <button class="lang-toggle__btn is-active" id="langEN" type="button">EN</button>
+
+          <button class="lang-toggle__btn" id="langES" type="button">ES</button>
+
+        </div>
+
+        <a href="../index.html" class="btn btn--ghost btn--small" data-i18n="viewSite">View site</a>
+
+        <button type="button" class="btn btn--ghost btn--small" id="logoutBtn" data-i18n="logout">Log out</button>
 
       </div>
 
@@ -54,27 +62,27 @@
 
         <nav class="admin-nav">
 
-          <button type="button" class="admin-nav__btn is-active" data-view="calendar">Calendar</button>
+          <button type="button" class="admin-nav__btn is-active" data-view="calendar" data-i18n="navCalendar">Calendar</button>
 
-          <button type="button" class="admin-nav__btn admin-nav__btn--accent" data-view="workday">Work day</button>
+          <button type="button" class="admin-nav__btn admin-nav__btn--accent" data-view="workday" data-i18n="navWorkday">WorkDay</button>
 
-          <button type="button" class="admin-nav__btn" data-view="route">Route planner</button>
+          <button type="button" class="admin-nav__btn" data-view="route" data-i18n="navRoute">Route planner</button>
 
-          <button type="button" class="admin-nav__btn" data-view="map">Customer map</button>
+          <button type="button" class="admin-nav__btn" data-view="map" data-i18n="navMap">Customer map</button>
 
-          <button type="button" class="admin-nav__btn" data-view="customers">All customers</button>
+          <button type="button" class="admin-nav__btn" data-view="customers" data-i18n="navCustomers">All customers</button>
 
-          <button type="button" class="admin-nav__btn" data-view="messages">Messages</button>
+          <button type="button" class="admin-nav__btn" data-view="messages" data-i18n="navMessages">Messages</button>
 
-          <button type="button" class="admin-nav__btn" data-view="add">+ Add customer</button>
+          <button type="button" class="admin-nav__btn" data-view="add" data-i18n="navAdd">+ Add customer</button>
 
         </nav>
 
         <div class="admin-stats card" id="statsPanel">
 
-          <h3>Route overview</h3>
+          <h3 data-i18n="statsTitle">Route overview</h3>
 
-          <p class="admin-stats__total"><strong id="statTotal">0</strong> active pools</p>
+          <p class="admin-stats__total"><strong id="statTotal">0</strong> <span data-i18n="statsActive">active pools</span></p>
 
           <ul class="admin-stats__list" id="statByDay"></ul>
 
@@ -92,23 +100,23 @@
 
           <div class="admin-toolbar">
 
-            <h1>Service calendar</h1>
+            <h1 data-i18n="calTitle">Service calendar</h1>
 
             <div class="calendar-nav">
 
-              <button type="button" class="btn btn--ghost btn--small" id="prevMonth" aria-label="Previous month">‹ Prev</button>
+              <button type="button" class="btn btn--ghost btn--small" id="prevMonth" aria-label="Previous month" data-i18n="prev">‹ Prev</button>
 
               <span id="calendarTitle"></span>
 
-              <button type="button" class="btn btn--ghost btn--small" id="nextMonth" aria-label="Next month">Next ›</button>
+              <button type="button" class="btn btn--ghost btn--small" id="nextMonth" aria-label="Next month" data-i18n="next">Next ›</button>
 
-              <button type="button" class="btn btn--small" id="todayBtn">Today</button>
+              <button type="button" class="btn btn--small" id="todayBtn" data-i18n="today">Today</button>
 
             </div>
 
           </div>
 
-          <p class="muted section__lead">Click a day to see every pool on that route. Counts reflect weekly service days plus any extras or skips.</p>
+          <p class="muted section__lead" data-i18n="calLead">Click a day to see every pool on that route. Counts reflect weekly service days plus any extras or skips.</p>
 
           <div class="calendar-grid" id="calendarGrid" aria-label="Monthly calendar"></div>
 
@@ -124,9 +132,9 @@
 
             <div>
 
-              <h1>Route planner</h1>
+              <h1 data-i18n="routeTitle">Route planner</h1>
 
-              <p class="muted section__lead">Optimized stop order for the most efficient pool route each day.</p>
+              <p class="muted section__lead" data-i18n="routeLead">Optimized stop order for the most efficient pool route each day.</p>
 
             </div>
 
@@ -134,41 +142,41 @@
 
               <label class="route-date-label">
 
-                <span class="sr-only">Service date</span>
+                <span class="sr-only" data-i18n="serviceDate">Service date</span>
 
                 <input type="date" id="routeDate" />
 
               </label>
 
-              <button type="button" class="btn btn--small" id="loadRouteBtn">Build route</button>
+              <button type="button" class="btn btn--small" id="loadRouteBtn" data-i18n="buildRoute">Build route</button>
 
             </div>
 
           </div>
 
           <details class="card route-start-panel" id="routeStartPanel" open>
-            <summary><strong>Route start address</strong> <span class="muted">-where you begin each day</span></summary>
+            <summary><strong data-i18n="routeStartTitle">Route start address</strong> <span class="muted" data-i18n="routeStartHint">- where you begin each day</span></summary>
             <form id="routeStartForm" class="route-start-form" autocomplete="on">
               <div class="form-row">
-                <label for="startStreet">Street address</label>
-                <input id="startStreet" name="street" required placeholder="Start typing to search…" autocomplete="address-line1" />
+                <label for="startStreet" data-i18n="street">Street address</label>
+                <input id="startStreet" name="street" required placeholder="Start typing to search…" data-i18n-ph="streetPh" autocomplete="address-line1" />
               </div>
               <div class="grid grid--2">
                 <div class="form-row">
-                  <label for="startCity">City</label>
+                  <label for="startCity" data-i18n="city">City</label>
                   <input id="startCity" name="city" required placeholder="Kissimmee" autocomplete="address-level2" />
                 </div>
                 <div class="form-row">
-                  <label for="startState">State</label>
+                  <label for="startState" data-i18n="state">State</label>
                   <input id="startState" name="state" required value="FL" maxlength="2" autocomplete="address-level1" readonly aria-readonly="true" />
                 </div>
               </div>
               <div class="form-row form-row--zip">
-                <label for="startZip">ZIP code</label>
+                <label for="startZip" data-i18n="zip">ZIP code</label>
                 <input id="startZip" name="zip" required placeholder="34741" pattern="\d{5}(-\d{4})?" autocomplete="postal-code" />
               </div>
               <div class="admin-form__actions">
-                <button type="submit" class="btn btn--small">Save start address</button>
+                <button type="submit" class="btn btn--small" data-i18n="saveStart">Save start address</button>
                 <p class="fineprint form-status" id="routeStartStatus" aria-live="polite"></p>
               </div>
             </form>
@@ -180,7 +188,7 @@
 
               <div class="route-panel__meta" id="routeMeta">
 
-                <p class="muted">Pick a date and build the route to see stops in order.</p>
+                <p class="muted" data-i18n="routeMetaDefault">Pick a date and build the route to see stops in order.</p>
 
               </div>
 
@@ -210,17 +218,17 @@
 
             <div>
 
-              <h1>Customer map</h1>
+              <h1 data-i18n="mapTitle">Customer map</h1>
 
-              <p class="muted section__lead">All active pool locations. Addresses are geocoded when customers are saved.</p>
+              <p class="muted section__lead" data-i18n="mapLead">All active pool locations. Addresses are geocoded when customers are saved.</p>
 
             </div>
 
             <div class="admin-topbar__actions">
 
-              <button type="button" class="btn btn--ghost btn--small" id="relocateAllBtn">Re-locate all</button>
+              <button type="button" class="btn btn--ghost btn--small" id="relocateAllBtn" data-i18n="relocateAll">Re-locate all</button>
 
-              <button type="button" class="btn btn--ghost btn--small" id="refreshMapBtn">Refresh map</button>
+              <button type="button" class="btn btn--ghost btn--small" id="refreshMapBtn" data-i18n="refreshMap">Refresh map</button>
 
             </div>
 
@@ -230,7 +238,7 @@
 
             <div id="customerMap" class="admin-map admin-map--tall" role="img" aria-label="Customer locations map"></div>
 
-            <p class="fineprint map-legend"><span class="map-legend__dot"></span> Active customer &nbsp;·&nbsp; Customers without a mapped location need a complete street address.</p>
+            <p class="fineprint map-legend"><span class="map-legend__dot"></span> <span data-i18n="mapLegend">Active customer · Customers without a mapped location need a complete street address.</span></p>
 
           </div>
 
@@ -242,9 +250,9 @@
 
         <section class="admin-view" id="view-customers" hidden>
 
-          <h1>All customers</h1>
+          <h1 data-i18n="custTitle">All customers</h1>
 
-          <p class="muted section__lead">Manage your pool list, service days, and private notes.</p>
+          <p class="muted section__lead" data-i18n="custLead">Manage your pool list, service days, and private notes.</p>
 
           <div id="customerList" class="customer-list"></div>
 
@@ -256,7 +264,7 @@
 
         <section class="admin-view" id="view-add" hidden>
 
-          <h1 id="formTitle">Add customer</h1>
+          <h1 id="formTitle" data-i18n="addTitle">Add customer</h1>
 
           <form class="card admin-form" id="customerForm" autocomplete="on">
 
@@ -264,7 +272,7 @@
 
             <div class="form-row">
 
-              <label for="name">Customer name *</label>
+              <label for="name" data-i18n="fName">Customer name *</label>
 
               <input id="name" name="name" required />
 
@@ -274,7 +282,7 @@
 
               <div class="form-row">
 
-                <label for="phone">Phone</label>
+                <label for="phone" data-i18n="fPhone">Phone</label>
 
                 <input id="phone" name="phone" type="tel" />
 
@@ -282,7 +290,7 @@
 
               <div class="form-row">
 
-                <label for="email">Email</label>
+                <label for="email" data-i18n="fEmail">Email</label>
 
                 <input id="email" name="email" type="email" />
 
@@ -292,13 +300,13 @@
 
             <fieldset class="address-fieldset">
 
-              <legend>Service address *</legend>
+              <legend data-i18n="fAddr">Service address *</legend>
 
               <div class="form-row">
 
-                <label for="street">Street address</label>
+                <label for="street" data-i18n="street">Street address</label>
 
-                <input id="street" name="street" required placeholder="Start typing to search…" autocomplete="address-line1" />
+                <input id="street" name="street" required placeholder="Start typing to search…" data-i18n-ph="streetPh" autocomplete="address-line1" />
 
               </div>
 
@@ -306,7 +314,7 @@
 
                 <div class="form-row">
 
-                  <label for="city">City</label>
+                  <label for="city" data-i18n="city">City</label>
 
                   <input id="city" name="city" required placeholder="Kissimmee" autocomplete="address-level2" />
 
@@ -314,7 +322,7 @@
 
                 <div class="form-row">
 
-                  <label for="state">State</label>
+                  <label for="state" data-i18n="state">State</label>
 
                   <input id="state" name="state" required value="FL" maxlength="2" autocomplete="address-level1" readonly aria-readonly="true" />
 
@@ -324,7 +332,7 @@
 
               <div class="form-row form-row--zip">
 
-                <label for="zip">ZIP code</label>
+                <label for="zip" data-i18n="zip">ZIP code</label>
 
                 <input id="zip" name="zip" required placeholder="34741" pattern="\d{5}(-\d{4})?" autocomplete="postal-code" />
 
@@ -336,27 +344,27 @@
 
               <div class="form-row">
 
-                <label for="serviceDayOfWeek">Weekly service day *</label>
+                <label for="serviceDayOfWeek" data-i18n="fDay">Weekly service day *</label>
 
                 <select id="serviceDayOfWeek" name="serviceDayOfWeek" required>
 
-                  <option value="0">Sunday</option>
+                  <option value="0" data-i18n="day0">Sunday</option>
 
-                  <option value="1">Monday</option>
+                  <option value="1" data-i18n="day1">Monday</option>
 
-                  <option value="2">Tuesday</option>
+                  <option value="2" data-i18n="day2">Tuesday</option>
 
-                  <option value="3">Wednesday</option>
+                  <option value="3" data-i18n="day3">Wednesday</option>
 
-                  <option value="4">Thursday</option>
+                  <option value="4" data-i18n="day4">Thursday</option>
 
-                  <option value="5">Friday</option>
+                  <option value="5" data-i18n="day5">Friday</option>
 
-                  <option value="6">Saturday</option>
+                  <option value="6" data-i18n="day6">Saturday</option>
 
                 </select>
 
-                <button type="button" class="btn btn--ghost btn--small" id="suggestDayBtn">Suggest best day from address</button>
+                <button type="button" class="btn btn--ghost btn--small" id="suggestDayBtn" data-i18n="suggestDay">Suggest best day from address</button>
 
                 <p class="fineprint" id="suggestDayResult" aria-live="polite"></p>
 
@@ -364,15 +372,15 @@
 
               <div class="form-row">
 
-                <label for="poolType">Pool type</label>
+                <label for="poolType" data-i18n="fPoolType">Pool type</label>
 
                 <select id="poolType" name="poolType">
 
-                  <option value="pool">Swimming pool</option>
+                  <option value="pool" data-i18n="optPool">Swimming pool</option>
 
-                  <option value="hottub">Hot tub</option>
+                  <option value="hottub" data-i18n="optHotTub">Hot tub</option>
 
-                  <option value="both">Both</option>
+                  <option value="both" data-i18n="optBoth">Both</option>
 
                 </select>
 
@@ -382,7 +390,7 @@
 
             <div class="form-row">
 
-              <label for="monthlyRate">Monthly rate ($)</label>
+              <label for="monthlyRate" data-i18n="fRate">Monthly rate ($)</label>
 
               <input id="monthlyRate" name="monthlyRate" type="number" min="0" step="1" placeholder="100" />
 
@@ -390,23 +398,23 @@
 
             <div class="form-row">
 
-              <label for="notes">Private notes</label>
+              <label for="notes" data-i18n="fNotes">Private notes</label>
 
-              <textarea id="notes" name="notes" rows="4" placeholder="Gate code, pets, chemicals, special instructions…"></textarea>
+              <textarea id="notes" name="notes" rows="4" placeholder="Gate code, pets, chemicals, special instructions…" data-i18n-ph="fNotesPh"></textarea>
 
             </div>
 
             <div class="form-row" id="activeRow" hidden>
 
-              <label><input type="checkbox" id="active" name="active" checked /> Active customer</label>
+              <label><input type="checkbox" id="active" name="active" checked /> <span data-i18n="fActive">Active customer</span></label>
 
             </div>
 
             <div class="admin-form__actions">
 
-              <button class="btn" type="submit">Save customer</button>
+              <button class="btn" type="submit" data-i18n="save">Save customer</button>
 
-              <button class="btn btn--ghost" type="button" id="cancelForm">Cancel</button>
+              <button class="btn btn--ghost" type="button" id="cancelForm" data-i18n="cancel">Cancel</button>
 
             </div>
 
@@ -424,9 +432,9 @@
 
             <div>
 
-              <h1>Messages</h1>
+              <h1 data-i18n="msgTitle">Messages</h1>
 
-              <p class="muted section__lead">Write in Spanish. Pick the language customers receive, then text them straight from your phone.</p>
+              <p class="muted section__lead" data-i18n="msgLead">Write in Spanish. Pick the language customers receive, then text them straight from your phone.</p>
 
             </div>
 
@@ -436,13 +444,13 @@
 
             <div class="form-row">
 
-              <label>Send to</label>
+              <label data-i18n="sendTo">Send to</label>
 
               <div class="msg-mode">
 
-                <label><input type="radio" name="msgMode" value="individual" checked /> One customer</label>
+                <label><input type="radio" name="msgMode" value="individual" checked /> <span data-i18n="oneCustomer">One customer</span></label>
 
-                <label><input type="radio" name="msgMode" value="day" /> Everyone on a date</label>
+                <label><input type="radio" name="msgMode" value="day" /> <span data-i18n="everyone">Everyone on a date</span></label>
 
               </div>
 
@@ -450,15 +458,15 @@
 
             <div class="form-row" id="msgIndividualRow">
 
-              <label for="msgCustomer">Customer</label>
+              <label for="msgCustomer" data-i18n="customer">Customer</label>
 
-              <select id="msgCustomer"><option value="">Select customer…</option></select>
+              <select id="msgCustomer"><option value="" data-i18n="selectCustomer">Select customer…</option></select>
 
             </div>
 
             <div class="form-row" id="msgDayRow" hidden>
 
-              <label for="msgDate">Service date</label>
+              <label for="msgDate" data-i18n="serviceDate">Service date</label>
 
               <input type="date" id="msgDate" />
 
@@ -466,21 +474,21 @@
 
             <div class="form-row">
 
-              <label for="msgInput">Your message (write in Spanish)</label>
+              <label for="msgInput" data-i18n="yourMessage">Your message (write in Spanish)</label>
 
-              <textarea id="msgInput" rows="4" placeholder="Ej.: Hola, paso mañana por la mañana a limpiar la piscina."></textarea>
+              <textarea id="msgInput" rows="4" placeholder="Ej.: Hola, paso mañana por la mañana a limpiar la piscina." data-i18n-ph="yourMessagePh"></textarea>
 
             </div>
 
             <div class="form-row">
 
-              <label>Customers receive it in</label>
+              <label data-i18n="receiveIn">Customers receive it in</label>
 
               <div class="msg-lang">
 
-                <button type="button" class="btn btn--small is-active" data-lang="en">English</button>
+                <button type="button" class="btn btn--small is-active" data-lang="en" data-i18n="english">English</button>
 
-                <button type="button" class="btn btn--ghost btn--small" data-lang="es">Spanish</button>
+                <button type="button" class="btn btn--ghost btn--small" data-lang="es" data-i18n="spanish">Spanish</button>
 
               </div>
 
@@ -488,7 +496,7 @@
 
             <div class="admin-form__actions">
 
-              <button type="button" class="btn" id="msgTranslateBtn">Preview message</button>
+              <button type="button" class="btn" id="msgTranslateBtn" data-i18n="previewMessage">Preview message</button>
 
               <span id="msgScore" class="msg-score" title="Estimated accuracy of the translation compared to what you wrote" hidden></span>
 
@@ -498,7 +506,7 @@
 
             <div class="msg-preview" id="msgPreview" hidden>
 
-              <label>Message customers will receive</label>
+              <label data-i18n="msgCustReceive">Message customers will receive</label>
 
               <p class="msg-preview__text" id="msgPreviewText"></p>
 
@@ -512,13 +520,13 @@
 
             <div class="admin-toolbar">
 
-              <h2>Message log</h2>
+              <h2 data-i18n="msgLog">Message log</h2>
 
-              <button type="button" class="btn btn--ghost btn--small" id="msgLogRefresh">Refresh</button>
+              <button type="button" class="btn btn--ghost btn--small" id="msgLogRefresh" data-i18n="refresh">Refresh</button>
 
             </div>
 
-            <p class="muted section__lead">Every text you start is recorded here and kept for the last 30 days.</p>
+            <p class="muted section__lead" data-i18n="msgLogLead">Every text you start is recorded here and kept for the last 30 days.</p>
 
             <div id="msgLogList"></div>
 
@@ -526,7 +534,7 @@
 
         </section>
 
-        <!-- Work day view -->
+        <!-- WorkDay view -->
 
         <section class="admin-view" id="view-workday" hidden>
 
@@ -534,13 +542,13 @@
 
             <div>
 
-              <h1>Work day</h1>
+              <h1 data-i18n="wdTitle">WorkDay</h1>
 
-              <p class="muted section__lead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
+              <p class="muted section__lead" data-i18n="wdLead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
 
             </div>
 
-            <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn">Download work log (CSV)</button>
+            <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
 
           </div>
 
@@ -578,7 +586,7 @@
 
     <div class="sheet__header">
 
-      <h2 id="navModalTitle">Navigate to</h2>
+      <h2 id="navModalTitle" data-i18n="navigateTo">Navigate to</h2>
 
       <button type="button" class="day-modal__close" id="closeNavModal" aria-label="Close">×</button>
 
@@ -594,7 +602,7 @@
 
     <div class="job-modal__header">
 
-      <h2 id="jobModalTitle">Job</h2>
+      <h2 id="jobModalTitle" data-i18n="job">Job</h2>
 
       <button type="button" class="day-modal__close" id="closeJobModal" aria-label="Close">×</button>
 

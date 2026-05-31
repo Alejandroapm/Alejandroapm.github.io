@@ -16,31 +16,35 @@
         <img src="../assets/logo.png" alt="" class="brand__logo" style="width:48px;height:48px" />
         <span class="brand__name">MSG Pool Services</span>
       </a>
+      <div class="lang-toggle" role="group" aria-label="Language toggle">
+        <button class="lang-toggle__btn is-active" id="langEN" type="button">EN</button>
+        <button class="lang-toggle__btn" id="langES" type="button">ES</button>
+      </div>
     </div>
   </header>
 
   <main class="admin-main">
     <div class="container">
       <div class="card admin-login-card">
-        <h1>Admin log in</h1>
+        <h1 data-i18n="loginTitle">Admin log in</h1>
         <p class="fineprint admin-server-notice" id="serverNotice"></p>
         <form id="loginForm">
           <div class="form-row">
-            <label for="email">Email</label>
+            <label for="email" data-i18n="loginEmail">Email</label>
             <input id="email" name="email" type="email" autocomplete="username" required />
           </div>
           <div class="form-row">
-            <label for="password">Password</label>
+            <label for="password" data-i18n="loginPassword">Password</label>
             <input id="password" name="password" type="password" autocomplete="current-password" required />
           </div>
           <div class="form-row admin-remember">
-            <label><input type="checkbox" id="rememberDevice" name="rememberDevice" /> Remember this device for 30 days</label>
-            <p class="fineprint">Only your email is saved on this computer -never your password.</p>
+            <label><input type="checkbox" id="rememberDevice" name="rememberDevice" /> <span data-i18n="rememberDevice">Remember this device for 30 days</span></label>
+            <p class="fineprint" data-i18n="rememberHint">Only your email is saved on this computer -never your password.</p>
           </div>
-          <button class="btn btn--full" type="submit">Log in</button>
+          <button class="btn btn--full" type="submit" data-i18n="loginBtn">Log in</button>
           <p class="fineprint form-status" id="formStatus" aria-live="polite"></p>
         </form>
-        <p class="admin-back"><a href="../index.html">← Back to website</a></p>
+        <p class="admin-back"><a href="../index.html" data-i18n="backToSite">← Back to website</a></p>
       </div>
     </div>
   </main>

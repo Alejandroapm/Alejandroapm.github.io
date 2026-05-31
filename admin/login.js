@@ -1,4 +1,7 @@
 import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer, isApiAvailable } from "../js/api-client.js";
+import { t, initLangToggle } from "../js/admin-i18n.js";
+
+initLangToggle();
 
 const REMEMBER_EMAIL_KEY = "msg_admin_saved_email";
 const REMEMBER_DEVICE_KEY = "msg_admin_remember_device";
@@ -42,7 +45,7 @@ form?.addEventListener("submit", async (e) => {
   const rememberDevice = !!document.getElementById("rememberDevice")?.checked;
 
   try {
-    setStatus(statusEl, "Signing in…");
+    setStatus(statusEl, t("signingIn"));
     await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, rememberDevice }),

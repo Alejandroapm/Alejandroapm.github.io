@@ -592,7 +592,7 @@ app.delete("/api/admin/messages/:id", async (c) =>
   })
 );
 
-// ---- Work day ----
+// ---- WorkDay ----
 app.get("/api/admin/workday/active", async (c) =>
   withAdmin(c, async (ctx) => json({ workday: await getActiveWorkday(ctx.env.DB) }))
 );
@@ -620,7 +620,7 @@ app.post("/api/admin/workday/:id/navigate", async (c) =>
       body.stopId ? Number(body.stopId) : null,
       coordsFromBody(body)
     );
-    if (!workday) return json({ error: "Work day not found." }, 404);
+    if (!workday) return json({ error: "WorkDay not found." }, 404);
     return json({ workday });
   })
 );
@@ -629,7 +629,7 @@ app.post("/api/admin/workday/:id/end", async (c) =>
   withAdmin(c, async (ctx) => {
     const body = await ctx.req.json().catch(() => ({}));
     const workday = await endWorkday(ctx.env.DB, Number(ctx.req.param("id")), coordsFromBody(body));
-    if (!workday) return json({ error: "Work day not found." }, 404);
+    if (!workday) return json({ error: "WorkDay not found." }, 404);
     return json({ workday });
   })
 );

@@ -1,11 +1,33 @@
-import { api, requireAdmin, DAYS, DAYS_SHORT, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin } from "../js/api-client.js";
+import { api, requireAdmin, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin } from "../js/api-client.js";
 import { loadLeaflet, createMap, drawRoute, drawCustomers, refreshMap } from "../js/admin-maps.js";
 import { attachAddressAutocomplete, pickedCoordsPayload, clearPickedCoords } from "../js/address-autocomplete.js";
+import { t, days as i18nDays, daysShort as i18nDaysShort, dayName, adminLocale, initLangToggle, onLangChange } from "../js/admin-i18n.js";
 
 const admin = await requireAdmin();
 if (!admin) throw new Error("redirect");
 
 document.getElementById("adminEmail").textContent = admin.email;
+
+initLangToggle();
+let currentView = "calendar";
+
+function poolsLabel(n) {
+  return `${n} ${n === 1 ? t("pool") : t("pools")}`;
+}
+
+function refreshCurrentView() {
+  if (currentView === "customers") loadCustomerList();
+  else if (currentView === "messages") initMessages();
+  else if (currentView === "workday") renderWorkday();
+  else if (currentView === "map") loadCustomerMap();
+  else if (currentView === "route" && routeDateInput.value) loadRoute(routeDateInput.value);
+}
+
+onLangChange(() => {
+  loadStats();
+  renderCalendar();
+  refreshCurrentView();
+});
 
 let viewYear = new Date().getFullYear();
 let viewMonth = new Date().getMonth() + 1;
@@ -53,6 +75,7 @@ function showView(name) {
 }
 
 function switchView(name) {
+  currentView = name;
   showView(name);
 
   if (name === "customers") loadCustomerList();
@@ -105,11 +128,11 @@ async function suggestBestDay() {
   const picked = pickedCoordsPayload(customerForm);
 
   if (!picked.lat && (!street || !city || !zip)) {
-    setStatus(resultEl, "Enter the address (street, city, ZIP) or pick it from the suggestions first.", "error");
+    setStatus(resultEl, t("dayEnterAddr"), "error");
     return;
   }
 
-  setStatus(resultEl, "Finding the best day…");
+  setStatus(resultEl, t("findingDay"));
   try {
     const data = await api("/api/admin/suggest-day", {
       method: "POST",
@@ -117,12 +140,12 @@ async function suggestBestDay() {
     });
     resultEl.classList.remove("form-status--error");
     resultEl.innerHTML = `
-      <strong>Suggested: ${DAYS[data.suggestedDay]}.</strong> ${esc(data.reason)}
-      <button type="button" class="btn btn--small" id="useSuggestedDay">Use ${DAYS[data.suggestedDay]}</button>
+      <strong>${t("suggested")}: ${dayName(data.suggestedDay)}.</strong> ${esc(data.reason)}
+      <button type="button" class="btn btn--small" id="useSuggestedDay">${t("use")} ${dayName(data.suggestedDay)}</button>
     `;
     document.getElementById("useSuggestedDay")?.addEventListener("click", () => {
       customerForm.serviceDayOfWeek.value = String(data.suggestedDay);
-      setStatus(resultEl, `Service day set to ${DAYS[data.suggestedDay]}.`, "success");
+      setStatus(resultEl, `${t("daySet")} ${dayName(data.suggestedDay)}.`, "success");
     });
   } catch (err) {
     setStatus(resultEl, err.message, "error");
@@ -132,7 +155,7 @@ async function suggestBestDay() {
 document.getElementById("loadRouteBtn")?.addEventListener("click", () => loadRoute(routeDateInput.value));
 document.getElementById("refreshMapBtn")?.addEventListener("click", () => loadCustomerMap());
 document.getElementById("relocateAllBtn")?.addEventListener("click", () => {
-  if (!confirm("Re-check every customer's location with Google Maps? This refreshes all map pins and can take a moment.")) return;
+  if (!confirm(t("relocateConfirm"))) return;
   loadCustomerMap(true);
 });
 
@@ -141,7 +164,7 @@ document.getElementById("routeStartForm")?.addEventListener("submit", async (e) 
   const statusEl = document.getElementById("routeStartStatus");
   const form = e.target;
   try {
-    setStatus(statusEl, "Saving…");
+    setStatus(statusEl, t("saving"));
     await api("/api/admin/settings/route-start", {
       method: "PUT",
       body: JSON.stringify({
@@ -153,7 +176,7 @@ document.getElementById("routeStartForm")?.addEventListener("submit", async (e) 
       }),
     });
     clearPickedCoords(form);
-    setStatus(statusEl, "Start address saved.", "success");
+    setStatus(statusEl, t("startAddrSaved"), "success");
     if (routeDateInput.value) loadRoute(routeDateInput.value);
   } catch (err) {
     setStatus(statusEl, err.message, "error");
@@ -181,13 +204,13 @@ customerForm?.addEventListener("submit", async (e) => {
   if (id) body.active = customerForm.active.checked;
 
   try {
-    setStatus(formStatus, "Saving…");
+    setStatus(formStatus, t("saving"));
     if (id) {
       await api(`/api/admin/customers/${id}`, { method: "PUT", body: JSON.stringify(body) });
     } else {
       await api("/api/admin/customers", { method: "POST", body: JSON.stringify(body) });
     }
-    setStatus(formStatus, "Saved!", "success");
+    setStatus(formStatus, t("saved"), "success");
     clearPickedCoords(customerForm);
     resetForm();
     await Promise.all([renderCalendar(), loadStats(), loadCustomerList()]);
@@ -228,7 +251,7 @@ async function loadRouteStartForm() {
 function resetForm() {
   customerForm.reset();
   document.getElementById("customerId").value = "";
-  document.getElementById("formTitle").textContent = "Add customer";
+  document.getElementById("formTitle").textContent = t("addTitle");
   document.getElementById("activeRow").hidden = true;
   document.getElementById("state").value = "FL";
   setStatus(formStatus, "");
@@ -236,7 +259,7 @@ function resetForm() {
 
 function editCustomer(c) {
   switchView("add");
-  document.getElementById("formTitle").textContent = "Edit customer";
+  document.getElementById("formTitle").textContent = t("editTitle");
   document.getElementById("customerId").value = c.id;
   customerForm.name.value = c.name;
   customerForm.phone.value = c.phone || "";
@@ -257,7 +280,7 @@ function editCustomer(c) {
 async function renderCalendar() {
   const title = document.getElementById("calendarTitle");
   const grid = document.getElementById("calendarGrid");
-  const monthName = new Date(viewYear, viewMonth - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+  const monthName = new Date(viewYear, viewMonth - 1, 1).toLocaleString(adminLocale(), { month: "long", year: "numeric" });
   title.textContent = monthName;
 
   const { counts } = await api(`/api/admin/calendar?year=${viewYear}&month=${viewMonth}`);
@@ -267,7 +290,7 @@ async function renderCalendar() {
   const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
   const today = fmtDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
 
-  let html = DAYS_SHORT.map((d) => `<div class="calendar-grid__head">${d}</div>`).join("");
+  let html = i18nDaysShort().map((d) => `<div class="calendar-grid__head">${d}</div>`).join("");
 
   for (let i = 0; i < firstDow; i++) {
     html += `<div class="calendar-cell calendar-cell--empty"></div>`;
@@ -280,7 +303,7 @@ async function renderCalendar() {
     html += `
       <button type="button" class="calendar-cell${isToday ? " calendar-cell--today" : ""}" data-date="${dateStr}">
         <span class="calendar-cell__num">${day}</span>
-        ${count ? `<span class="calendar-cell__badge">${count} pool${count === 1 ? "" : "s"}</span>` : ""}
+        ${count ? `<span class="calendar-cell__badge">${poolsLabel(count)}</span>` : ""}
       </button>
     `;
   }
@@ -295,10 +318,10 @@ async function openDayModal(dateStr) {
   selectedDate = dateStr;
   const d = new Date(`${dateStr}T12:00:00`);
   document.getElementById("dayModalTitle").textContent =
-    `${DAYS[d.getDay()]}, ${d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
+    `${dayName(d.getDay())}, ${d.toLocaleDateString(adminLocale(), { month: "long", day: "numeric", year: "numeric" })}`;
 
   const body = document.getElementById("dayModalBody");
-  body.innerHTML = `<p class="muted">Loading…</p>`;
+  body.innerHTML = `<p class="muted">${t("loading")}</p>`;
   dayModal.showModal();
 
   const { customers } = await api(`/api/admin/day?date=${dateStr}`);
@@ -306,15 +329,15 @@ async function openDayModal(dateStr) {
 
   const routeBtn = `
     <button type="button" class="btn btn--small day-modal__route" data-route-date="${dateStr}">
-      View optimized route
+      ${t("viewRoute")}
     </button>
   `;
 
   if (!customers.length) {
     body.innerHTML = `
-      <p class="muted">No pools scheduled this day.</p>
-      <p class="fineprint">Assign customers a weekly service day, or add a one-time extra visit below.</p>
-      <h3>Add one-time visit</h3>
+      <p class="muted">${t("noPoolsThisDay")}</p>
+      <p class="fineprint">${t("assignHint")}</p>
+      <h3>${t("addOneTime")}</h3>
       ${extraHtml}
     `;
     bindExtraForm(dateStr);
@@ -323,15 +346,15 @@ async function openDayModal(dateStr) {
 
   body.innerHTML = `
     <div class="day-modal__toolbar">
-      <p class="muted">${customers.length} pool${customers.length === 1 ? "" : "s"} on route</p>
-      <button type="button" class="btn btn--ghost btn--small" data-msg-date="${dateStr}">Text customers</button>
+      <p class="muted">${poolsLabel(customers.length)} ${t("onRoute")}</p>
+      <button type="button" class="btn btn--ghost btn--small" data-msg-date="${dateStr}">${t("textCustomers")}</button>
       ${routeBtn}
     </div>
     <div class="day-list">
       ${customers.map((c) => renderDayCustomer(c, dateStr)).join("")}
     </div>
     <hr class="hr" />
-    <h3>Add one-time visit</h3>
+    <h3>${t("addOneTime")}</h3>
     ${extraHtml}
   `;
   bindDayActions(dateStr);
@@ -356,16 +379,16 @@ function renderDayCustomer(c, dateStr) {
     <article class="day-customer" data-id="${c.id}">
       <div class="day-customer__head">
         <strong>${esc(c.name)}</strong>
-        ${extra ? '<span class="tag tag--extra">Extra visit</span>' : ""}
-        ${skipped ? '<span class="tag tag--skip">Skipped</span>' : ""}
+        ${extra ? `<span class="tag tag--extra">${t("extraVisit")}</span>` : ""}
+        ${skipped ? `<span class="tag tag--skip">${t("skipped")}</span>` : ""}
       </div>
       <p class="muted">${esc(formatAddress(c))}</p>
       ${c.phone ? `<p>📞 <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></p>` : ""}
-      ${c.notes ? `<p class="day-customer__notes"><strong>Notes:</strong> ${esc(c.notes)}</p>` : ""}
+      ${c.notes ? `<p class="day-customer__notes"><strong>${t("notes")}</strong> ${esc(c.notes)}</p>` : ""}
       <div class="day-customer__actions">
-        <button type="button" class="btn btn--ghost btn--small" data-edit="${c.id}">Edit</button>
-        <button type="button" class="btn btn--ghost btn--small" data-skip="${c.id}">Skip this day</button>
-        ${extra ? `<button type="button" class="btn btn--ghost btn--small" data-unextra="${c.id}">Remove extra</button>` : ""}
+        <button type="button" class="btn btn--ghost btn--small" data-edit="${c.id}">${t("edit")}</button>
+        <button type="button" class="btn btn--ghost btn--small" data-skip="${c.id}">${t("skipThisDay")}</button>
+        ${extra ? `<button type="button" class="btn btn--ghost btn--small" data-unextra="${c.id}">${t("removeExtra")}</button>` : ""}
       </div>
     </article>
   `;
@@ -374,18 +397,18 @@ function renderDayCustomer(c, dateStr) {
 async function renderAddExtraForm(dateStr) {
   const { customers } = await api("/api/admin/customers");
   if (!customers.length) {
-    return `<p class="muted">Add customers first to schedule extra visits.</p>`;
+    return `<p class="muted">${t("addCustomersFirst")}</p>`;
   }
   return `
     <form class="extra-form" data-date="${dateStr}">
       <div class="form-row">
-        <label>Customer</label>
+        <label>${t("customer")}</label>
         <select name="customerId" required>
-          <option value="">Select customer…</option>
-          ${customers.map((c) => `<option value="${c.id}">${esc(c.name)} -${DAYS[c.serviceDayOfWeek]}</option>`).join("")}
+          <option value="">${t("selectCustomer")}</option>
+          ${customers.map((c) => `<option value="${c.id}">${esc(c.name)} -${dayName(c.serviceDayOfWeek)}</option>`).join("")}
         </select>
       </div>
-      <button type="submit" class="btn btn--small">Schedule extra visit</button>
+      <button type="submit" class="btn btn--small">${t("scheduleExtra")}</button>
     </form>
   `;
 }
@@ -442,7 +465,7 @@ async function loadRoute(dateStr) {
   const list = document.getElementById("routeStopList");
   const warnings = document.getElementById("routeWarnings");
 
-  meta.innerHTML = `<p class="muted">Building optimized route…</p>`;
+  meta.innerHTML = `<p class="muted">${t("buildingRoute")}</p>`;
   list.innerHTML = "";
   warnings.hidden = true;
 
@@ -453,10 +476,11 @@ async function loadRoute(dateStr) {
   try {
     const route = await api(`/api/admin/route?date=${dateStr}`);
     const d = new Date(`${dateStr}T12:00:00`);
+    const localDay = dayName(d.getDay());
     const scheduledCount = route.scheduledCount ?? route.stops?.length ?? 0;
 
     if (!scheduledCount) {
-      meta.innerHTML = `<p class="muted"><strong>${route.dayName}</strong> -No pools scheduled for this date.</p>`;
+      meta.innerHTML = `<p class="muted"><strong>${localDay}</strong> -${t("noPoolsDate")}</p>`;
       drawRoute(routeMap, routeLayer, { depot: route.depot, stops: [], geometry: null });
       await refreshMap(routeMap);
       return;
@@ -464,14 +488,17 @@ async function loadRoute(dateStr) {
 
     const stats = [];
     if (route.distanceMiles != null) stats.push(`${route.distanceMiles} mi`);
-    if (route.durationMinutes != null) stats.push(`~${route.durationMinutes} min drive`);
+    if (route.durationMinutes != null) stats.push(`~${route.durationMinutes} ${t("minDrive")}`);
 
-    const startLabel = route.depot?.label ? esc(route.depot.label) : "your saved start address";
+    const startLabel = route.depot?.label ? esc(route.depot.label) : t("yourSavedStart");
+    const mappedTxt = route.stops?.length
+      ? ` · ${route.stops.length} ${route.stops.length === 1 ? t("mappedStop") : t("mappedStops")}`
+      : "";
 
     meta.innerHTML = `
-      <h2 class="route-panel__title">${route.dayName}, ${d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</h2>
-      <p class="route-panel__stats">${scheduledCount} pool${scheduledCount === 1 ? "" : "s"} scheduled${route.stops?.length ? ` · ${route.stops.length} mapped stop${route.stops.length === 1 ? "" : "s"}` : ""}${stats.length ? ` · ${stats.join(" · ")}` : ""}</p>
-      <p class="fineprint">Optimized driving order from ${startLabel}.</p>
+      <h2 class="route-panel__title">${localDay}, ${d.toLocaleDateString(adminLocale(), { month: "long", day: "numeric", year: "numeric" })}</h2>
+      <p class="route-panel__stats">${poolsLabel(scheduledCount)} ${t("scheduled")}${mappedTxt}${stats.length ? ` · ${stats.join(" · ")}` : ""}</p>
+      <p class="fineprint">${t("optimizedFrom")} ${startLabel}.</p>
     `;
 
     if (route.stops?.length) {
@@ -487,15 +514,15 @@ async function loadRoute(dateStr) {
         </li>
       `).join("");
     } else {
-      list.innerHTML = `<li class="muted">Pools are scheduled but none could be placed on the map yet.</li>`;
+      list.innerHTML = `<li class="muted">${t("poolsScheduledNone")}</li>`;
     }
 
     if (route.unmapped?.length) {
       warnings.hidden = false;
       warnings.innerHTML = `
-        <p><strong>${route.unmapped.length} pool${route.unmapped.length === 1 ? "" : "s"} not on map:</strong></p>
+        <p><strong>${poolsLabel(route.unmapped.length)} ${t("notOnMap")}</strong></p>
         <ul>${route.unmapped.map((c) => `<li>${esc(c.name)} -${esc(formatAddress(c))}</li>`).join("")}</ul>
-        <p class="fineprint">Edit each customer, pick their address from the Florida search results, save, then rebuild the route.</p>
+        <p class="fineprint">${t("rebuildHint")}</p>
       `;
     }
 
@@ -509,7 +536,7 @@ async function loadRoute(dateStr) {
 async function loadCustomerMap(force = false) {
   await ensureCustomerMap();
   const metaEl = document.querySelector("#view-map .section__lead");
-  metaEl.textContent = force ? "Re-checking all locations with Google Maps…" : "Loading customer locations…";
+  metaEl.textContent = force ? t("relocatingLocations") : t("loadingLocations");
 
   try {
     const { customers, geocoded, attempted } = await api(`/api/admin/map/geocode${force ? "?force=1" : ""}`, { method: "POST" });
@@ -518,12 +545,12 @@ async function loadCustomerMap(force = false) {
 
     if (attempted > 0) {
       metaEl.textContent = unmapped
-        ? `Mapped ${geocoded} of ${attempted} pending address${attempted === 1 ? "" : "es"}. ${mapped.length} on map; ${unmapped} still need a verified address.`
-        : `All ${customers.length} active customers mapped.`;
+        ? `${t("mappedShort")} ${geocoded} ${t("ofWord")} ${attempted}. ${mapped.length} ${t("onMapLc")} ${unmapped} ${t("stillNeedAddr")}`
+        : `${t("mapAll")} ${customers.length} ${t("activeMapped")}`;
     } else {
       metaEl.textContent = unmapped
-        ? `${mapped.length} of ${customers.length} active customers on map. ${unmapped} need a complete address.`
-        : `All ${customers.length} active customers on map.`;
+        ? `${mapped.length} ${t("ofWord")} ${customers.length} ${t("activeOnMap")} ${unmapped} ${t("needCompleteAddr")}`
+        : `${t("mapAll")} ${customers.length} ${t("activeOnMap")}`;
     }
 
     drawCustomers(customerMap, customerLayer, customers);
@@ -538,7 +565,7 @@ async function loadCustomerList() {
   const el = document.getElementById("customerList");
 
   if (!customers.length) {
-    el.innerHTML = `<p class="muted">No customers yet. Use “Add customer” to get started.</p>`;
+    el.innerHTML = `<p class="muted">${t("noCustomers")}</p>`;
     return;
   }
 
@@ -546,17 +573,17 @@ async function loadCustomerList() {
     <article class="customer-row${c.active ? "" : " customer-row--inactive"}">
       <div>
         <strong>${esc(c.name)}</strong>
-        <span class="tag">${DAYS[c.serviceDayOfWeek]}</span>
-        ${c.active ? "" : '<span class="tag tag--skip">Inactive</span>'}
-        ${c.lat != null ? '<span class="tag tag--mapped">On map</span>' : '<span class="tag tag--warn">Not mapped</span>'}
+        <span class="tag">${dayName(c.serviceDayOfWeek)}</span>
+        ${c.active ? "" : `<span class="tag tag--skip">${t("inactive")}</span>`}
+        ${c.lat != null ? `<span class="tag tag--mapped">${t("onMap")}</span>` : `<span class="tag tag--warn">${t("notMapped")}</span>`}
         <p class="muted">${esc(formatAddress(c))}</p>
         ${c.phone ? `<p>${esc(c.phone)}</p>` : ""}
         ${c.notes ? `<p class="customer-row__notes">${esc(c.notes)}</p>` : ""}
       </div>
       <div class="customer-row__actions">
-        <button type="button" class="btn btn--ghost btn--small" data-edit-list="${c.id}">Edit</button>
-        ${c.active ? `<button type="button" class="btn btn--ghost btn--small" data-deactivate="${c.id}">Deactivate</button>` : ""}
-        <button type="button" class="btn btn--ghost btn--small btn--danger" data-delete="${c.id}">Remove permanently</button>
+        <button type="button" class="btn btn--ghost btn--small" data-edit-list="${c.id}">${t("edit")}</button>
+        ${c.active ? `<button type="button" class="btn btn--ghost btn--small" data-deactivate="${c.id}">${t("deactivate")}</button>` : ""}
+        <button type="button" class="btn btn--ghost btn--small btn--danger" data-delete="${c.id}">${t("removePermanently")}</button>
       </div>
     </article>
   `).join("");
@@ -570,7 +597,7 @@ async function loadCustomerList() {
 
   el.querySelectorAll("[data-deactivate]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      if (!confirm("Deactivate this customer? They will be removed from the calendar but kept in your records.")) return;
+      if (!confirm(t("deactivateConfirm"))) return;
       await api(`/api/admin/customers/${btn.dataset.deactivate}/deactivate`, { method: "PATCH" });
       loadCustomerList();
       renderCalendar();
@@ -580,7 +607,7 @@ async function loadCustomerList() {
 
   el.querySelectorAll("[data-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      if (!confirm("Permanently remove this customer? This cannot be undone and deletes all visit overrides.")) return;
+      if (!confirm(t("deleteConfirm"))) return;
       await api(`/api/admin/customers/${btn.dataset.delete}`, { method: "DELETE" });
       loadCustomerList();
       renderCalendar();
@@ -594,8 +621,8 @@ async function loadStats() {
   document.getElementById("statTotal").textContent = totalActive;
   document.getElementById("statByDay").innerHTML = routeLoad
     .filter((r) => r.count > 0)
-    .map((r) => `<li><strong>${r.dayName}</strong> -${r.count} pool${r.count === 1 ? "" : "s"}</li>`)
-    .join("") || "<li class='muted'>No routes yet</li>";
+    .map((r) => `<li><strong>${dayName(r.day ?? r.dayOfWeek)}</strong> -${poolsLabel(r.count)}</li>`)
+    .join("") || `<li class='muted'>${t("noRoutes")}</li>`;
 }
 
 // ---- Messaging ----
@@ -610,17 +637,20 @@ async function initMessages() {
     dateInput.value = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
   }
   loadMessageLog();
-  if (msgCustomersLoaded) return;
   try {
-    const { customers } = await api("/api/admin/customers");
-    msgCustomers = customers;
+    if (!msgCustomersLoaded) {
+      const { customers } = await api("/api/admin/customers");
+      msgCustomers = customers;
+      msgCustomersLoaded = true;
+    }
     const select = document.getElementById("msgCustomer");
+    const keep = select.value;
     select.innerHTML =
-      `<option value="">Select customer…</option>` +
-      customers
-        .map((c) => `<option value="${c.id}">${esc(c.name)}${c.phone ? "" : " (no phone)"}</option>`)
+      `<option value="">${t("selectCustomer")}</option>` +
+      msgCustomers
+        .map((c) => `<option value="${c.id}">${esc(c.name)}${c.phone ? "" : ` (${t("noPhone").toLowerCase()})`}</option>`)
         .join("");
-    msgCustomersLoaded = true;
+    select.value = keep;
   } catch (err) {
     setStatus(document.getElementById("msgStatus"), err.message, "error");
   }
@@ -634,7 +664,7 @@ function updateScore(score) {
     return;
   }
   el.hidden = false;
-  el.textContent = `Accuracy ${score}%`;
+  el.textContent = `${t("accuracy")} ${score}%`;
   el.classList.remove("msg-score--high", "msg-score--mid", "msg-score--low");
   el.classList.add(score >= 90 ? "msg-score--high" : score >= 75 ? "msg-score--mid" : "msg-score--low");
 }
@@ -646,11 +676,11 @@ function renderMsgRecipient(c, message) {
     <article class="msg-recipient">
       <div>
         <strong>${esc(c.name)}</strong>
-        <p class="muted">${phone ? esc(c.phone) : "No phone on file"}</p>
+        <p class="muted">${phone ? esc(c.phone) : t("noPhone")}</p>
       </div>
       ${smsHref
-        ? `<a class="btn btn--small" data-sms data-log-id="${c.id ?? ""}" data-log-name="${esc(c.name)}" data-log-phone="${esc(c.phone || "")}" href="${smsHref}">Text</a>`
-        : `<span class="tag tag--warn">Add a phone</span>`}
+        ? `<a class="btn btn--small" data-sms data-log-id="${c.id ?? ""}" data-log-name="${esc(c.name)}" data-log-phone="${esc(c.phone || "")}" href="${smsHref}">${t("text")}</a>`
+        : `<span class="tag tag--warn">${t("addPhone")}</span>`}
     </article>
   `;
 }
@@ -665,8 +695,8 @@ async function logMessage(entry) {
 }
 
 function renderLogItem(m) {
-  const when = new Date(m.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
-  const lang = m.language === "es" ? "Spanish" : "English";
+  const when = new Date(m.created_at).toLocaleString(adminLocale(), { dateStyle: "medium", timeStyle: "short" });
+  const lang = m.language === "es" ? t("spanish") : t("english");
   return `
     <article class="msg-log__item">
       <div class="msg-log__meta">
@@ -678,7 +708,7 @@ function renderLogItem(m) {
       </div>
       <p class="msg-log__sent">${esc(m.sent_text)}</p>
       ${m.original_text && m.original_text !== m.sent_text
-        ? `<p class="msg-log__orig muted">You wrote: ${esc(m.original_text)}</p>`
+        ? `<p class="msg-log__orig muted">${t("youWrote")} ${esc(m.original_text)}</p>`
         : ""}
     </article>
   `;
@@ -691,11 +721,11 @@ async function loadMessageLog() {
     const { messages } = await api("/api/admin/messages");
     list.innerHTML = messages.length
       ? messages.map(renderLogItem).join("")
-      : `<p class="muted">No messages logged yet.</p>`;
+      : `<p class="muted">${t("noMessages")}</p>`;
 
     list.querySelectorAll("[data-del-msg]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Delete this message from the log?")) return;
+        if (!confirm(t("deleteMsgConfirm"))) return;
         try {
           await api(`/api/admin/messages/${btn.dataset.delMsg}`, { method: "DELETE" });
           loadMessageLog();
@@ -722,7 +752,7 @@ async function composeMessage() {
   updateScore(null);
 
   if (!text) {
-    setStatus(statusEl, "Write a message first.", "error");
+    setStatus(statusEl, t("writeFirst"), "error");
     return;
   }
 
@@ -731,12 +761,12 @@ async function composeMessage() {
   try {
     if (mode === "individual") {
       const id = Number(document.getElementById("msgCustomer").value);
-      if (!id) { setStatus(statusEl, "Select a customer.", "error"); return; }
+      if (!id) { setStatus(statusEl, t("selectACustomer"), "error"); return; }
       const c = msgCustomers.find((x) => x.id === id);
       if (c) recipients = [c];
     } else {
       const date = document.getElementById("msgDate").value;
-      if (!date) { setStatus(statusEl, "Pick a date.", "error"); return; }
+      if (!date) { setStatus(statusEl, t("pickADate"), "error"); return; }
       const { customers } = await api(`/api/admin/day?date=${date}`);
       recipients = customers;
     }
@@ -746,12 +776,12 @@ async function composeMessage() {
   }
 
   if (!recipients.length) {
-    setStatus(statusEl, "No customers found for that selection.", "error");
+    setStatus(statusEl, t("noCustomersSel"), "error");
     return;
   }
 
   let outgoing = text;
-  setStatus(statusEl, "Polishing message…");
+  setStatus(statusEl, t("polishing"));
   try {
     const { translated, score } = await api("/api/admin/translate", {
       method: "POST",
@@ -770,12 +800,12 @@ async function composeMessage() {
 
   const withPhone = recipients.filter((c) => (c.phone || "").trim());
   recipientsEl.innerHTML = `
-    <h3>Recipients (${recipients.length})</h3>
+    <h3>${t("recipients")} (${recipients.length})</h3>
     <div class="msg-recipient-list">
       ${recipients.map((c) => renderMsgRecipient(c, outgoing)).join("")}
     </div>
-    <p class="fineprint">Tap “Text” to open your phone’s Messages app with the message ready to send${
-      withPhone.length < recipients.length ? ". Customers without a phone number are skipped." : "."
+    <p class="fineprint">${t("tapTextHint")}${
+      withPhone.length < recipients.length ? t("skippedNoPhone") : "."
     }</p>
   `;
 
@@ -828,7 +858,7 @@ document.querySelectorAll('input[name="msgMode"]').forEach((radio) => {
 document.getElementById("msgTranslateBtn")?.addEventListener("click", composeMessage);
 document.getElementById("msgLogRefresh")?.addEventListener("click", loadMessageLog);
 
-// ---- Work day ----
+// ---- WorkDay ----
 let workday = null;
 let workdayBusy = false;
 let jobLang = "en";
@@ -855,7 +885,7 @@ function getPosition() {
 
 function fmtTime(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString(adminLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
 function firstName(name) {
@@ -864,7 +894,7 @@ function firstName(name) {
 
 async function initWorkday() {
   const body = document.getElementById("workdayBody");
-  body.innerHTML = `<p class="muted">Loading…</p>`;
+  body.innerHTML = `<p class="muted">${t("loading")}</p>`;
   try {
     const { workday: wd } = await api("/api/admin/workday/active");
     workday = wd;
@@ -890,14 +920,14 @@ async function renderStartScreen(body) {
   const today = fmtDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
   body.innerHTML = `
     <div class="workday-start card">
-      <h2>Start your work day</h2>
-      <p class="muted">We'll build today's optimized route and guide you stop by stop.</p>
+      <h2>${t("startTitle")}</h2>
+      <p class="muted">${t("startBlurb")}</p>
       <div class="form-row">
-        <label for="workdayDate">Date</label>
+        <label for="workdayDate">${t("date")}</label>
         <input type="date" id="workdayDate" value="${today}" />
       </div>
-      <p class="workday-start__count muted" id="workdayCount">Checking today's schedule…</p>
-      <button type="button" class="btn btn--block" id="startDayBtn">Start day</button>
+      <p class="workday-start__count muted" id="workdayCount">${t("checkingSchedule")}</p>
+      <button type="button" class="btn btn--block" id="startDayBtn">${t("startDay")}</button>
       <p class="fineprint" id="workdayStartStatus" aria-live="polite"></p>
     </div>
   `;
@@ -907,8 +937,8 @@ async function renderStartScreen(body) {
     try {
       const { customers } = await api(`/api/admin/day?date=${dateInput.value}`);
       countEl.textContent = customers.length
-        ? `${customers.length} pool${customers.length === 1 ? "" : "s"} scheduled for this date.`
-        : "No pools scheduled for this date.";
+        ? `${poolsLabel(customers.length)} ${t("poolsScheduledForDate")}`
+        : t("noPoolsForDate");
     } catch {
       countEl.textContent = "";
     }
@@ -924,7 +954,7 @@ async function startDay(date) {
   const btn = document.getElementById("startDayBtn");
   workdayBusy = true;
   btn.disabled = true;
-  setStatus(statusEl, "Getting your location and building the route… this can take a moment.");
+  setStatus(statusEl, t("buildingDay"));
   const coords = await getPosition();
   try {
     const { workday: wd } = await api("/api/admin/workday/start", {
@@ -941,6 +971,11 @@ async function startDay(date) {
   }
 }
 
+function wdDayLabel() {
+  if (!workday?.date) return esc(workday?.dayName || "");
+  return dayName(new Date(`${workday.date}T12:00:00`).getDay());
+}
+
 function renderActiveDay(body) {
   const stops = workday.stops || [];
   const total = stops.length;
@@ -950,8 +985,8 @@ function renderActiveDay(body) {
   if (!total) {
     body.innerHTML = `
       <div class="workday-bar card">
-        <div><strong>${esc(workday.dayName)}</strong><p class="muted">No stops on this route.</p></div>
-        <button type="button" class="btn btn--ghost btn--small" id="endDayBtn">End day</button>
+        <div><strong>${wdDayLabel()}</strong><p class="muted">${t("noStopsRoute")}</p></div>
+        <button type="button" class="btn btn--ghost btn--small" id="endDayBtn">${t("endDay")}</button>
       </div>`;
     document.getElementById("endDayBtn").addEventListener("click", endDay);
     return;
@@ -960,10 +995,10 @@ function renderActiveDay(body) {
   body.innerHTML = `
     <div class="workday-bar card">
       <div>
-        <strong>${esc(workday.dayName)}</strong>
-        <p class="muted">${done} of ${total} done · started ${esc(fmtTime(workday.startedAt))}</p>
+        <strong>${wdDayLabel()}</strong>
+        <p class="muted">${done} ${t("of")} ${total} ${t("done")} · ${t("started")} ${esc(fmtTime(workday.startedAt))}</p>
       </div>
-      <button type="button" class="btn btn--ghost btn--small" id="endDayBtn">End day</button>
+      <button type="button" class="btn btn--ghost btn--small" id="endDayBtn">${t("endDay")}</button>
     </div>
     <div class="workday-progress"><span style="width:${total ? Math.round((done / total) * 100) : 0}%"></span></div>
     <div class="workday-stops">
@@ -989,25 +1024,25 @@ function renderStopCard(stop, idx, activeIdx) {
           : "";
 
   const badge = stop.status === "completed"
-    ? `<span class="tag tag--mapped">Done ${esc(fmtTime(stop.completedAt))}</span>`
+    ? `<span class="tag tag--mapped">${t("done")} ${esc(fmtTime(stop.completedAt))}</span>`
     : stop.status === "skipped"
-      ? `<span class="tag tag--skip">Skipped</span>`
+      ? `<span class="tag tag--skip">${t("skipped")}</span>`
       : stop.status === "in_progress"
-        ? `<span class="tag tag--extra">In progress</span>`
+        ? `<span class="tag tag--extra">${t("inProgress")}</span>`
         : isActive
-          ? `<span class="tag tag--extra">Next stop</span>`
+          ? `<span class="tag tag--extra">${t("nextStop")}</span>`
           : "";
 
   let actions = "";
   if (isActive) {
     actions = `
       <div class="workday-stop__actions">
-        ${canNavigate(stop) ? `<button type="button" class="btn btn--small" data-nav="${stop.id}">Navigate</button>` : `<span class="tag tag--warn">No address</span>`}
+        ${canNavigate(stop) ? `<button type="button" class="btn btn--small" data-nav="${stop.id}">${t("navigate")}</button>` : `<span class="tag tag--warn">${t("noAddress")}</span>`}
         ${stop.status === "in_progress"
-          ? `<button type="button" class="btn btn--small" data-job="${stop.id}">Open job</button>`
-          : `<button type="button" class="btn btn--small" data-startjob="${stop.id}">Start job</button>`}
-        <button type="button" class="btn btn--ghost btn--small" data-job="${stop.id}">Complete job</button>
-        <button type="button" class="btn btn--ghost btn--small" data-skip="${stop.id}">Skip</button>
+          ? `<button type="button" class="btn btn--small" data-job="${stop.id}">${t("openJob")}</button>`
+          : `<button type="button" class="btn btn--small" data-startjob="${stop.id}">${t("startJob")}</button>`}
+        <button type="button" class="btn btn--ghost btn--small" data-job="${stop.id}">${t("completeJob")}</button>
+        <button type="button" class="btn btn--ghost btn--small" data-skip="${stop.id}">${t("skip")}</button>
       </div>`;
   }
 
@@ -1021,7 +1056,7 @@ function renderStopCard(stop, idx, activeIdx) {
         </div>
         <p class="muted">${esc(stop.address)}</p>
         ${stop.phone ? `<p class="fineprint"><a href="tel:${esc(stop.phone)}">${esc(stop.phone)}</a></p>` : ""}
-        ${stop.customerNotes ? `<p class="workday-stop__note"><strong>Note:</strong> ${esc(stop.customerNotes)}</p>` : ""}
+        ${stop.customerNotes ? `<p class="workday-stop__note"><strong>${t("customerNote")}</strong> ${esc(stop.customerNotes)}</p>` : ""}
         ${actions}
       </div>
     </article>
@@ -1053,17 +1088,17 @@ function canNavigate(stop) {
 
 function openNavChooser(stop) {
   if (!canNavigate(stop)) return;
-  document.getElementById("navModalTitle").textContent = `Navigate to ${stop.name}`;
+  document.getElementById("navModalTitle").textContent = `${t("navigateTo")} ${stop.name}`;
   // Prefer the address text so the maps app resolves the exact house number,
   // instead of a stored pin that may be interpolated a few houses off.
   const dest = stop.address
     ? encodeURIComponent(stop.address)
     : `${stop.lat},${stop.lng}`;
   const apps = [
-    { name: "Google Maps", href: `https://www.google.com/maps/dir/?api=1&destination=${dest}` },
-    { name: "Apple Maps", href: `https://maps.apple.com/?daddr=${dest}` },
-    { name: "Waze", href: `https://waze.com/ul?q=${dest}&navigate=yes` },
-    { name: "Other / default maps app", href: `geo:0,0?q=${dest}` },
+    { name: t("googleMaps"), href: `https://www.google.com/maps/dir/?api=1&destination=${dest}` },
+    { name: t("appleMaps"), href: `https://maps.apple.com/?daddr=${dest}` },
+    { name: t("waze"), href: `https://waze.com/ul?q=${dest}&navigate=yes` },
+    { name: t("otherMaps"), href: `geo:0,0?q=${dest}` },
   ];
   document.getElementById("navModalBody").innerHTML = apps
     .map((a) => `<a class="btn btn--block sheet__option" target="_blank" rel="noopener" href="${a.href}">${a.name}</a>`)
@@ -1100,7 +1135,7 @@ async function doStartJob(stopId) {
 }
 
 async function skipCurrentStop(stopId) {
-  if (!confirm("Skip this stop for today?")) return;
+  if (!confirm(t("skipStopConfirm"))) return;
   const coords = await getPosition();
   try {
     const { workday: wd } = await api(`/api/admin/workday/stop/${stopId}/skip`, {
@@ -1120,61 +1155,61 @@ function openJobPanel(stop) {
   document.getElementById("jobModalTitle").textContent = stop.name;
   const langBtns = (group) => `
     <div class="msg-lang" data-lang-group="${group}">
-      <button type="button" class="btn btn--small ${jobLang === "en" ? "is-active" : "btn--ghost"}" data-job-lang="en">English</button>
-      <button type="button" class="btn btn--small ${jobLang === "es" ? "is-active" : "btn--ghost"}" data-job-lang="es">Spanish</button>
+      <button type="button" class="btn btn--small ${jobLang === "en" ? "is-active" : "btn--ghost"}" data-job-lang="en">${t("english")}</button>
+      <button type="button" class="btn btn--small ${jobLang === "es" ? "is-active" : "btn--ghost"}" data-job-lang="es">${t("spanish")}</button>
     </div>`;
 
   document.getElementById("jobModalBody").innerHTML = `
     <p class="muted job-modal__addr">${esc(stop.address)}</p>
-    ${canNavigate(stop) ? `<button type="button" class="btn btn--ghost btn--small" id="jobNavBtn">Navigate here</button>` : ""}
-    ${stop.customerNotes ? `<div class="job-callout"><strong>Customer note:</strong> ${esc(stop.customerNotes)}</div>` : ""}
+    ${canNavigate(stop) ? `<button type="button" class="btn btn--ghost btn--small" id="jobNavBtn">${t("navigateHere")}</button>` : ""}
+    ${stop.customerNotes ? `<div class="job-callout"><strong>${t("customerNote")}</strong> ${esc(stop.customerNotes)}</div>` : ""}
 
     <div class="form-row">
-      <label for="jobNotes">Your private notes for this job</label>
-      <textarea id="jobNotes" rows="3" placeholder="Chemicals added, issues found, follow-ups…">${esc(stop.notes || "")}</textarea>
+      <label for="jobNotes">${t("yourPrivateNotes")}</label>
+      <textarea id="jobNotes" rows="3" placeholder="${esc(t("notesPh"))}">${esc(stop.notes || "")}</textarea>
       <p class="fineprint" id="jobNotesStatus" aria-live="polite"></p>
     </div>
 
     <hr class="hr" />
 
     <div class="job-section">
-      <h3>Message ${esc(firstName(stop.name)) || "customer"}</h3>
-      <p class="fineprint">Write in Spanish. Pick the language the customer receives, attach photos, then share to your messaging app.</p>
-      <textarea id="jobMsgInput" rows="3" placeholder="Ej.: Encontré un problema con la bomba…"></textarea>
-      <label class="fineprint">Customer receives it in</label>
+      <h3>${t("message")} ${esc(firstName(stop.name)) || t("customer").toLowerCase()}</h3>
+      <p class="fineprint">${t("msgJobBlurb")}</p>
+      <textarea id="jobMsgInput" rows="3" placeholder="${esc(t("msgJobPh"))}"></textarea>
+      <label class="fineprint">${t("receiveIn")}</label>
       ${langBtns("message")}
       <div class="job-photos">
         <label class="btn btn--ghost btn--small job-photo-add">
-          + Add photo
+          ${t("addPhoto")}
           <input type="file" accept="image/*" capture="environment" multiple hidden id="jobMsgPhotos" />
         </label>
         <div class="job-photo-thumbs" id="jobMsgThumbs"></div>
       </div>
-      <button type="button" class="btn btn--small" id="jobMsgPreviewBtn">Preview &amp; prepare</button>
+      <button type="button" class="btn btn--small" id="jobMsgPreviewBtn">${t("previewPrepare")}</button>
       <div class="msg-preview" id="jobMsgPreview" hidden>
-        <label>Customer will receive</label>
+        <label>${t("customerWillReceive")}</label>
         <p class="msg-preview__text" id="jobMsgPreviewText"></p>
       </div>
-      <button type="button" class="btn btn--block" id="jobMsgShareBtn" hidden>Share to customer</button>
+      <button type="button" class="btn btn--block" id="jobMsgShareBtn" hidden>${t("shareToCustomer")}</button>
       <p class="fineprint" id="jobMsgStatus" aria-live="polite"></p>
     </div>
 
     <hr class="hr" />
 
     <div class="job-section job-section--complete">
-      <h3>Complete job</h3>
-      <p class="fineprint">A completion message is ready. Attach a photo of the clean pool, share it, then mark the job complete.</p>
+      <h3>${t("completeJobH")}</h3>
+      <p class="fineprint">${t("completeBlurb")}</p>
       <textarea id="jobDoneMsg" rows="3">${esc(COMPLETION_MSG[jobLang](firstName(stop.name)))}</textarea>
       ${langBtns("complete")}
       <div class="job-photos">
         <label class="btn btn--ghost btn--small job-photo-add">
-          + Add pool photo
+          ${t("addPoolPhoto")}
           <input type="file" accept="image/*" capture="environment" multiple hidden id="jobDonePhotos" />
         </label>
         <div class="job-photo-thumbs" id="jobDoneThumbs"></div>
       </div>
-      <button type="button" class="btn btn--ghost btn--block" id="jobDoneShareBtn">Share completion message</button>
-      <button type="button" class="btn btn--block" id="jobCompleteBtn">Mark job complete</button>
+      <button type="button" class="btn btn--ghost btn--block" id="jobDoneShareBtn">${t("shareCompletion")}</button>
+      <button type="button" class="btn btn--block" id="jobCompleteBtn">${t("markComplete")}</button>
       <p class="fineprint" id="jobDoneStatus" aria-live="polite"></p>
     </div>
   `;
@@ -1208,9 +1243,9 @@ function bindJobPanel(stop) {
         });
         const local = findStop(stop.id);
         if (local) local.notes = notesEl.value;
-        setStatus(document.getElementById("jobNotesStatus"), "Saved.", "success");
+        setStatus(document.getElementById("jobNotesStatus"), t("savedShort"), "success");
       } catch {
-        setStatus(document.getElementById("jobNotesStatus"), "Couldn't save notes.", "error");
+        setStatus(document.getElementById("jobNotesStatus"), t("notesSaveErr"), "error");
       }
     }, 700);
   });
@@ -1260,8 +1295,8 @@ function bindJobPanel(stop) {
   document.getElementById("jobMsgPreviewBtn").addEventListener("click", async () => {
     const statusEl = document.getElementById("jobMsgStatus");
     const text = document.getElementById("jobMsgInput").value.trim();
-    if (!text) { setStatus(statusEl, "Write a message first.", "error"); return; }
-    setStatus(statusEl, "Polishing message…");
+    if (!text) { setStatus(statusEl, t("writeFirst"), "error"); return; }
+    setStatus(statusEl, t("polishing"));
     try {
       const { translated } = await api("/api/admin/translate", {
         method: "POST",
@@ -1319,16 +1354,16 @@ function bindJobPanel(stop) {
 }
 
 function reportShare(statusEl, res, photoCount) {
-  if (res.cancelled) { setStatus(statusEl, "Share cancelled.", ""); return; }
-  if (!res.shared) { setStatus(statusEl, "Add a phone number or use a phone that supports sharing.", "error"); return; }
+  if (res.cancelled) { setStatus(statusEl, t("shareCancelled"), ""); return; }
+  if (!res.shared) { setStatus(statusEl, t("shareNeedPhone"), "error"); return; }
   if (res.viaSms) {
-    setStatus(statusEl, "Messages opened with the customer selected — just tap send.", "success");
+    setStatus(statusEl, t("smsOpened"), "success");
   } else if (photoCount && res.withFiles) {
-    setStatus(statusEl, "Photo + message ready. Pick the customer and tap send.", "success");
+    setStatus(statusEl, t("photoReady"), "success");
   } else if (photoCount && !res.withFiles) {
-    setStatus(statusEl, "Message opened, but this phone couldn't auto-attach the photo — add it in Messages.", "");
+    setStatus(statusEl, t("photoNoAttach"), "");
   } else {
-    setStatus(statusEl, "Opened your messaging app.", "success");
+    setStatus(statusEl, t("openedApp"), "success");
   }
 }
 
@@ -1384,7 +1419,7 @@ async function doComplete(stopId, notes) {
 }
 
 async function endDay() {
-  if (!workday || !confirm("End the work day? You can download the log afterwards.")) return;
+  if (!workday || !confirm(t("endDayConfirm"))) return;
   const coords = await getPosition();
   try {
     const { workday: wd } = await api(`/api/admin/workday/${workday.id}/end`, {
@@ -1406,15 +1441,15 @@ function renderSummaryScreen(body) {
   const hrs = mins != null ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—";
   body.innerHTML = `
     <div class="workday-summary card">
-      <h2>Day complete</h2>
+      <h2>${t("dayComplete")}</h2>
       <div class="workday-summary__grid">
-        <div><span class="workday-summary__num">${done}</span><span class="muted">jobs done</span></div>
-        <div><span class="workday-summary__num">${skipped}</span><span class="muted">skipped</span></div>
-        <div><span class="workday-summary__num">${workday.totalMiles ?? 0}</span><span class="muted">miles</span></div>
-        <div><span class="workday-summary__num">${hrs}</span><span class="muted">on the road</span></div>
+        <div><span class="workday-summary__num">${done}</span><span class="muted">${t("jobsDone")}</span></div>
+        <div><span class="workday-summary__num">${skipped}</span><span class="muted">${t("skipped").toLowerCase()}</span></div>
+        <div><span class="workday-summary__num">${workday.totalMiles ?? 0}</span><span class="muted">${t("miles")}</span></div>
+        <div><span class="workday-summary__num">${hrs}</span><span class="muted">${t("onTheRoad")}</span></div>
       </div>
-      <button type="button" class="btn btn--block" id="exportLogBtn2">Download work log (CSV)</button>
-      <button type="button" class="btn btn--ghost btn--block" id="newDayBtn">Start a new day</button>
+      <button type="button" class="btn btn--block" id="exportLogBtn2">${t("downloadCsv")}</button>
+      <button type="button" class="btn btn--ghost btn--block" id="newDayBtn">${t("startNewDay")}</button>
     </div>
   `;
   document.getElementById("exportLogBtn2").addEventListener("click", downloadWorkLog);

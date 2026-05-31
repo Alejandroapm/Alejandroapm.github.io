@@ -633,7 +633,7 @@
   .msg-log__del{ margin-left:auto; }
 }
 
-/* ---- Work day ---- */
+/* ---- WorkDay ---- */
 .btn--block{ display:block; width:100%; text-align:center; }
 .admin-nav__btn--accent{ color:var(--brand); }
 .admin-nav__btn--accent.is-active,
