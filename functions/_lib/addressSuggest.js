@@ -76,39 +76,49 @@ export function parseNominatimResult(item) {
   };
 }
 
+async function nominatimSuggest(q) {
+  const params = floridaSearchParams({ q: `${q}, Florida, USA`, limit: "8" });
+  let res;
+  try {
+    res = await fetch(`${NOMINATIM}?${params}`, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    });
+  } catch {
+    return [];
+  }
+  if (!res.ok) return [];
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return [];
+  }
+  return data
+    .filter(isFloridaNominatimItem)
+    .map(parseNominatimResult)
+    .filter((item) => item.state === "FL" && (item.street || item.city));
+}
+
 export async function suggestAddresses(query) {
   const q = String(query || "").trim();
   if (q.length < 3) return [];
 
-  const params = floridaSearchParams({
-    q: `${q}, Florida, USA`,
-    limit: "8",
-  });
+  // Query OpenStreetMap always; also query the US Census geocoder whenever the text
+  // starts with a house number, since OSM frequently misses exact US residences.
+  const hasHouseNumber = /^\s*\d/.test(q);
+  const [osm, census] = await Promise.all([
+    nominatimSuggest(q),
+    hasHouseNumber ? censusSuggest(q) : Promise.resolve([]),
+  ]);
 
-  const res = await fetch(`${NOMINATIM}?${params}`, {
-    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error("Address lookup unavailable.");
-
-  const data = await res.json();
+  // Census results first (more accurate for residential addresses), then OSM. Dedupe.
   const seen = new Set();
-
-  const results = data
-    .filter(isFloridaNominatimItem)
-    .map(parseNominatimResult)
-    .filter((item) => item.state === "FL" && (item.street || item.city))
-    .filter((item) => {
-      const key = `${item.street}|${item.city}|${item.zip}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-  // If OpenStreetMap has nothing and the query looks like a full street address,
-  // fall back to the US Census geocoder (which has far better US residential coverage).
-  if (!results.length && /\d/.test(q)) {
-    return censusSuggest(q);
+  const merged = [];
+  for (const item of [...census, ...osm]) {
+    const key = `${(item.street || "").toLowerCase()}|${(item.city || "").toLowerCase()}|${item.zip}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
   }
-
-  return results;
+  return merged.slice(0, 8);
 }
