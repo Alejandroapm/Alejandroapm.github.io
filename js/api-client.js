@@ -75,16 +75,18 @@ export function isStaticDevServer() {
   return window.location.origin !== getServerOrigin();
 }
 
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+  const { timeoutMessage, ...fetchOptions } = options;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await fetch(url, { ...fetchOptions, signal: controller.signal });
   } catch (err) {
     if (err.name === "AbortError") {
       throw new Error(
-        "Admin server is not responding. If you use Cloudflare Pages, check that D1 and environment variables are configured (see README)."
+        timeoutMessage ||
+          "This is taking too long. If starting a work day, geocode customers on the Map tab first, then try again."
       );
     }
     throw err;
@@ -108,7 +110,7 @@ export async function isApiAvailable() {
     const res = await fetchWithTimeout(`${API}/api/health`, {
       credentials: "include",
       headers: authHeaders(),
-    });
+    }, API_TIMEOUT_MS);
     return res.ok;
   } catch {
     return false;
@@ -116,18 +118,20 @@ export async function isApiAvailable() {
 }
 
 export async function api(path, options = {}) {
+  const { timeoutMs, timeoutMessage, ...fetchOptions } = options;
   let res;
   try {
     res = await fetchWithTimeout(`${API}${path}`, {
       credentials: "include",
-      ...options,
+      ...fetchOptions,
       headers: authHeaders({
         "Content-Type": "application/json",
-        ...options.headers,
+        ...fetchOptions.headers,
       }),
-    });
+      timeoutMessage,
+    }, timeoutMs ?? API_TIMEOUT_MS);
   } catch (err) {
-    if (err.message?.includes("not responding")) throw err;
+    if (err.message?.includes("taking too long") || err.message?.includes("not responding")) throw err;
     throw new Error(
       isStaticDevServer()
         ? `Cannot reach the admin server at ${getServerOrigin()}. Run cd server && npm start, then open ${getServerOrigin()}/admin/`
@@ -194,9 +198,11 @@ export async function requireAdmin() {
 
 /** Authenticated fetch for downloads and other non-JSON responses. */
 export async function authFetch(path, options = {}) {
+  const { timeoutMs, timeoutMessage, ...fetchOptions } = options;
   return fetchWithTimeout(`${API}${path}`, {
     credentials: "include",
-    ...options,
-    headers: authHeaders(options.headers || {}),
-  });
+    ...fetchOptions,
+    headers: authHeaders(fetchOptions.headers || {}),
+    timeoutMessage,
+  }, timeoutMs ?? API_TIMEOUT_MS);
 }

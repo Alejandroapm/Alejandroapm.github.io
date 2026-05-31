@@ -117,7 +117,7 @@ export async function startWorkday(db, env, dateStr, auth, coords = null) {
   let unmapped = [];
   if (scheduled.length) {
     const depot = await getRouteDepot(db, auth.userId);
-    const route = await buildOptimizedRoute(db, scheduled, depot, env);
+    const route = await buildOptimizedRoute(db, scheduled, depot, env, { geocode: false, driving: false });
     ordered = route.stops || [];
     unmapped = route.unmapped || [];
   }

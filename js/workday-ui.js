@@ -145,6 +145,7 @@ export function createWorkdayUI(deps) {
       const { workday: wd } = await api("/api/admin/workday/start", {
         method: "POST",
         body: JSON.stringify({ date, ...(coords || {}) }),
+        timeoutMs: 60000,
       });
       workday = wd;
       renderWorkday();

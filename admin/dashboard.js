@@ -515,7 +515,7 @@ async function loadRoute(dateStr) {
   await ensureRouteMap();
 
   try {
-    const route = await api(`/api/admin/route?date=${dateStr}`);
+    const route = await api(`/api/admin/route?date=${dateStr}`, { timeoutMs: 120000 });
     const d = new Date(`${dateStr}T12:00:00`);
     const localDay = dayName(d.getDay());
     const scheduledCount = route.scheduledCount ?? route.stops?.length ?? 0;
@@ -580,7 +580,10 @@ async function loadCustomerMap(force = false) {
   metaEl.textContent = force ? t("relocatingLocations") : t("loadingLocations");
 
   try {
-    const { customers, geocoded, attempted } = await api(`/api/admin/map/geocode${force ? "?force=1" : ""}`, { method: "POST" });
+    const { customers, geocoded, attempted } = await api(`/api/admin/map/geocode${force ? "?force=1" : ""}`, {
+      method: "POST",
+      timeoutMs: 120000,
+    });
     const mapped = customers.filter((c) => c.lat != null && c.lng != null);
     const unmapped = customers.length - mapped.length;
 
