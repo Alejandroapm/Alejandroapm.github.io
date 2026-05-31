@@ -1,11 +1,13 @@
 import { publicCustomer, ensureCustomerCoords, sleep } from "./db.js";
 import { optimizeStopOrder, fetchDrivingRoute, DEFAULT_DEPOT } from "./routing.js";
+import { isInFlorida } from "./florida.js";
 
 export async function buildOptimizedRoute(db, customers, depotInput = DEFAULT_DEPOT, env = null) {
   const depot = depotInput?.lat != null && depotInput?.lng != null ? depotInput : DEFAULT_DEPOT;
   const geocoded = [];
 
   for (const c of customers) {
+    const hadCoords = c.lat != null && c.lng != null && isInFlorida(c.lat, c.lng);
     const coords = await ensureCustomerCoords(db, c, env);
     if (coords) {
       geocoded.push({
@@ -16,7 +18,7 @@ export async function buildOptimizedRoute(db, customers, depotInput = DEFAULT_DE
     } else {
       geocoded.push({ ...publicCustomer(c), lat: null, lng: null, geocodeError: true });
     }
-    await sleep(250);
+    if (!hadCoords) await sleep(250);
   }
 
   const mappable = geocoded.filter((c) => c.lat != null && c.lng != null);

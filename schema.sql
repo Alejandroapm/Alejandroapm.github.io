@@ -112,5 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_message_logs_created ON message_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_message_logs_owner ON message_logs(owner_id);
 CREATE INDEX IF NOT EXISTS idx_work_days_status ON work_days(status);
 CREATE INDEX IF NOT EXISTS idx_work_days_owner ON work_days(owner_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_work_days_one_active_per_owner
+  ON work_days(owner_id) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id);
 CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id);

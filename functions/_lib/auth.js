@@ -8,11 +8,11 @@ function secretKey(env) {
   return new TextEncoder().encode(env.JWT_SECRET);
 }
 
-export async function signToken(env, user) {
+export async function signToken(env, user, remember = false) {
   const role = user.role || "user";
   return new SignJWT({ sub: String(user.id), role, email: user.email })
     .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("7d")
+    .setExpirationTime(remember ? "30d" : "1d")
     .sign(secretKey(env));
 }
 

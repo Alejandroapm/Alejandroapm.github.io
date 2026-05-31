@@ -111,28 +111,33 @@ export async function startWorkday(db, env, dateStr, auth, coords = null) {
   if (existing) return { workday: existing, resumed: true };
 
   const scheduled = await customersForDate(db, dateStr, auth);
-  const scheduledIds = new Set(scheduled.map((c) => c.id));
-  const scheduledRows = scheduled.filter((c) => scheduledIds.has(c.id));
-  const notesById = new Map(scheduledRows.map((c) => [c.id, c.notes || ""]));
+  const notesById = new Map(scheduled.map((c) => [c.id, c.notes || ""]));
 
   let ordered = [];
   let unmapped = [];
-  if (scheduledRows.length) {
+  if (scheduled.length) {
     const depot = await getRouteDepot(db, auth.userId);
-    const route = await buildOptimizedRoute(db, scheduledRows, depot, env);
+    const route = await buildOptimizedRoute(db, scheduled, depot, env);
     ordered = route.stops || [];
     unmapped = route.unmapped || [];
   }
 
   const now = Date.now();
-  const res = await db
-    .prepare(
-      `INSERT INTO work_days (date, status, started_at, start_lat, start_lng, total_miles, owner_id, created_at)
-       VALUES (?, 'active', ?, ?, ?, 0, ?, ?)`
-    )
-    .bind(dateStr, now, coords?.lat ?? null, coords?.lng ?? null, auth.userId, now)
-    .run();
-  const workDayId = res.meta.last_row_id;
+  let workDayId;
+  try {
+    const res = await db
+      .prepare(
+        `INSERT INTO work_days (date, status, started_at, start_lat, start_lng, total_miles, owner_id, created_at)
+         VALUES (?, 'active', ?, ?, ?, 0, ?, ?)`
+      )
+      .bind(dateStr, now, coords?.lat ?? null, coords?.lng ?? null, auth.userId, now)
+      .run();
+    workDayId = res.meta.last_row_id;
+  } catch {
+    const resumed = await getActiveWorkday(db, auth);
+    if (resumed) return { workday: resumed, resumed: true };
+    throw new Error("Could not start the work day.");
+  }
 
   const inserts = [];
   let seq = 0;

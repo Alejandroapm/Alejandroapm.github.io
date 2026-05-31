@@ -48,16 +48,7 @@ import {
   endWorkday,
   exportWorkdaysCsv,
 } from "./workday.js";
-
-function haversineMiles(lat1, lng1, lat2, lng2) {
-  const R = 3958.8;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+import { milesBetween } from "./florida.js";
 
 const app = new Hono();
 
@@ -187,7 +178,7 @@ app.post("/api/auth/login", async (c) => {
     id: admin.id,
     email: admin.email,
     role: admin.role || "user",
-  });
+  }, rememberDevice);
   const secure = new URL(c.req.url).protocol === "https:";
   return json(
     { ok: true, admin: publicAdmin(admin) },
@@ -384,10 +375,8 @@ app.get("/api/admin/route", async (c) =>
     }
     const d = new Date(`${date}T12:00:00`);
     const scheduled = await customersForDate(ctx.env.DB, date, auth);
-    const scheduledIds = new Set(scheduled.map((c) => c.id));
-    const scheduledRows = scheduled.filter((c) => scheduledIds.has(c.id));
 
-    if (!scheduledRows.length) {
+    if (!scheduled.length) {
       return json({
         date, dayName: DAY_NAMES[d.getDay()], scheduledCount: 0,
         depot: await getRouteDepot(ctx.env.DB, auth.userId), stops: [], unmapped: [],
@@ -396,8 +385,8 @@ app.get("/api/admin/route", async (c) =>
     }
     try {
       const depot = await getRouteDepot(ctx.env.DB, auth.userId);
-      const route = await buildOptimizedRoute(ctx.env.DB, scheduledRows, depot, ctx.env);
-      return json({ date, dayName: DAY_NAMES[d.getDay()], scheduledCount: scheduledRows.length, ...route });
+      const route = await buildOptimizedRoute(ctx.env.DB, scheduled, depot, ctx.env);
+      return json({ date, dayName: DAY_NAMES[d.getDay()], scheduledCount: scheduled.length, ...route });
     } catch {
       return json({ error: "Could not build optimized route." }, 500);
     }
@@ -528,7 +517,7 @@ app.post("/api/admin/suggest-day", async (c) =>
       const located = onDay.filter((c) => c.lat != null && c.lng != null);
       let nearest = null;
       for (const c of located) {
-        const d = haversineMiles(lat, lng, c.lat, c.lng);
+        const d = milesBetween(lat, lng, c.lat, c.lng);
         if (nearest == null || d < nearest) nearest = d;
       }
       return {

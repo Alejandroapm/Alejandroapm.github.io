@@ -70,8 +70,11 @@ export async function findAdminById(db, id) {
   return db.prepare("SELECT * FROM admins WHERE id = ?").bind(id).first();
 }
 
+let schemaInitialized = false;
+
 /** Creates D1 tables on first use (matches schema.sql). Safe to call every request. */
 export async function ensureSchema(db) {
+  if (schemaInitialized) return;
   await db.batch([
     db.prepare(`
       CREATE TABLE IF NOT EXISTS admins (
@@ -191,6 +194,7 @@ export async function ensureSchema(db) {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id)"),
   ]);
   await runMigrations(db, null);
+  schemaInitialized = true;
 }
 
 async function columnExists(db, table, column) {
@@ -214,6 +218,10 @@ export async function runMigrations(db, env) {
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_customers_owner ON customers(owner_id)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_work_days_owner ON work_days(owner_id)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_message_logs_owner ON message_logs(owner_id)").run();
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_work_days_one_active_per_owner
+    ON work_days(owner_id) WHERE status = 'active'
+  `).run();
 
   const superEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
   if (superEmail) {
@@ -348,13 +356,48 @@ export async function customersForDate(db, dateStr, auth) {
   }));
 }
 
+function countCustomersForDate(customers, overridesForDate, dateStr) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return 0;
+
+  const dow = d.getDay();
+  const skipIds = new Set(overridesForDate.filter((o) => o.type === "skip").map((o) => o.customer_id));
+  const extraIds = overridesForDate.filter((o) => o.type === "extra").map((o) => o.customer_id);
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+
+  const scheduledIds = new Set(
+    customers.filter((c) => c.service_day_of_week === dow && !skipIds.has(c.id)).map((c) => c.id)
+  );
+  for (const id of extraIds) {
+    if (customerById.has(id)) scheduledIds.add(id);
+  }
+  return scheduledIds.size;
+}
+
 export async function calendarSummary(db, year, month, auth) {
-  const end = new Date(year, month, 0);
+  const customers = await getActiveCustomers(db, auth);
+  const customerIds = new Set(customers.map((c) => c.id));
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+
+  const { results: monthOverrides } = await db
+    .prepare("SELECT * FROM service_overrides WHERE date >= ? AND date <= ?")
+    .bind(monthStart, monthEnd)
+    .all();
+
+  const overridesByDate = new Map();
+  for (const o of monthOverrides || []) {
+    if (!customerIds.has(o.customer_id)) continue;
+    if (!overridesByDate.has(o.date)) overridesByDate.set(o.date, []);
+    overridesByDate.get(o.date).push(o);
+  }
+
   const summary = {};
-  for (let day = 1; day <= end.getDate(); day++) {
+  for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const list = await customersForDate(db, dateStr, auth);
-    summary[dateStr] = { count: list.length, customers: list };
+    const count = countCustomersForDate(customers, overridesByDate.get(dateStr) || [], dateStr);
+    summary[dateStr] = { count };
   }
   return summary;
 }
@@ -506,6 +549,17 @@ export async function deleteTeamUser(db, id) {
   const user = await findAdminById(db, id);
   if (!user) return false;
   if (user.role === "super") throw new Error("Cannot delete the super account.");
-  await db.prepare("DELETE FROM admins WHERE id = ?").bind(id).run();
+
+  const superRow = await db
+    .prepare("SELECT id FROM admins WHERE role = 'super' ORDER BY id ASC LIMIT 1")
+    .first();
+  if (!superRow) throw new Error("No super account found to reassign data.");
+
+  await db.batch([
+    db.prepare("UPDATE customers SET owner_id = ? WHERE owner_id = ?").bind(superRow.id, id),
+    db.prepare("UPDATE work_days SET owner_id = ? WHERE owner_id = ?").bind(superRow.id, id),
+    db.prepare("UPDATE message_logs SET owner_id = ? WHERE owner_id = ?").bind(superRow.id, id),
+    db.prepare("DELETE FROM admins WHERE id = ?").bind(id),
+  ]);
   return true;
 }
