@@ -554,3 +554,30 @@
 @media (max-width: 520px){
   .calendar-cell__badge{ font-size:10px; padding:2px 6px; }
 }
+
+/* Messaging */
+.msg-compose{ display:flex; flex-direction:column; gap:14px; }
+.msg-mode{ display:flex; flex-wrap:wrap; gap:16px; }
+.msg-mode label{ display:flex; align-items:center; gap:6px; font-weight:700; }
+.msg-lang{ display:flex; gap:8px; }
+.msg-preview{
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(11,95,255,.05);
+  padding:12px 14px;
+}
+.msg-preview > label{ display:block; font-weight:900; color:var(--muted); font-size:12px; margin-bottom:6px; }
+.msg-preview__text{ margin:0; white-space:pre-wrap; }
+.msg-recipients{ margin-top:18px; }
+.msg-recipient-list{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.msg-recipient{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+  padding:10px 14px;
+}
+.msg-recipient .btn{ flex:none; }

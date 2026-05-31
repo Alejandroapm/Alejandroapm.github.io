@@ -62,6 +62,8 @@
 
           <button type="button" class="admin-nav__btn" data-view="customers">All customers</button>
 
+          <button type="button" class="admin-nav__btn" data-view="messages">Messages</button>
+
           <button type="button" class="admin-nav__btn" data-view="add">+ Add customer</button>
 
         </nav>
@@ -399,6 +401,98 @@
             <p class="fineprint form-status" id="formStatus" aria-live="polite"></p>
 
           </form>
+
+        </section>
+
+        <!-- Messages view -->
+
+        <section class="admin-view" id="view-messages" hidden>
+
+          <div class="admin-toolbar">
+
+            <div>
+
+              <h1>Messages</h1>
+
+              <p class="muted section__lead">Write in Spanish. Pick the language customers receive, then text them straight from your phone.</p>
+
+            </div>
+
+          </div>
+
+          <div class="msg-compose card">
+
+            <div class="form-row">
+
+              <label>Send to</label>
+
+              <div class="msg-mode">
+
+                <label><input type="radio" name="msgMode" value="individual" checked /> One customer</label>
+
+                <label><input type="radio" name="msgMode" value="day" /> Everyone on a date</label>
+
+              </div>
+
+            </div>
+
+            <div class="form-row" id="msgIndividualRow">
+
+              <label for="msgCustomer">Customer</label>
+
+              <select id="msgCustomer"><option value="">Select customer…</option></select>
+
+            </div>
+
+            <div class="form-row" id="msgDayRow" hidden>
+
+              <label for="msgDate">Service date</label>
+
+              <input type="date" id="msgDate" />
+
+            </div>
+
+            <div class="form-row">
+
+              <label for="msgInput">Your message (write in Spanish)</label>
+
+              <textarea id="msgInput" rows="4" placeholder="Ej.: Hola, paso mañana por la mañana a limpiar la piscina."></textarea>
+
+            </div>
+
+            <div class="form-row">
+
+              <label>Customers receive it in</label>
+
+              <div class="msg-lang">
+
+                <button type="button" class="btn btn--small is-active" data-lang="en">English</button>
+
+                <button type="button" class="btn btn--ghost btn--small" data-lang="es">Spanish</button>
+
+              </div>
+
+            </div>
+
+            <div class="admin-form__actions">
+
+              <button type="button" class="btn" id="msgTranslateBtn">Preview message</button>
+
+            </div>
+
+            <p class="fineprint form-status" id="msgStatus" aria-live="polite"></p>
+
+            <div class="msg-preview" id="msgPreview" hidden>
+
+              <label>Message customers will receive</label>
+
+              <p class="msg-preview__text" id="msgPreviewText"></p>
+
+            </div>
+
+          </div>
+
+          <div class="msg-recipients" id="msgRecipients"></div>
 
         </section>
 

@@ -22,6 +22,7 @@ const views = {
   route: document.getElementById("view-route"),
   map: document.getElementById("view-map"),
   customers: document.getElementById("view-customers"),
+  messages: document.getElementById("view-messages"),
   add: document.getElementById("view-add"),
 };
 
@@ -54,6 +55,7 @@ function switchView(name) {
   showView(name);
 
   if (name === "customers") loadCustomerList();
+  if (name === "messages") initMessages();
   if (name === "add") resetForm();
   if (name === "route") {
     loadRouteStartForm().then(() => ensureRouteMap());
@@ -282,6 +284,7 @@ async function openDayModal(dateStr) {
   body.innerHTML = `
     <div class="day-modal__toolbar">
       <p class="muted">${customers.length} pool${customers.length === 1 ? "" : "s"} on route</p>
+      <button type="button" class="btn btn--ghost btn--small" data-msg-date="${dateStr}">Text customers</button>
       ${routeBtn}
     </div>
     <div class="day-list">
@@ -298,6 +301,11 @@ async function openDayModal(dateStr) {
     dayModal.close();
     routeDateInput.value = dateStr;
     document.querySelector('[data-view="route"]').click();
+  });
+
+  body.querySelector("[data-msg-date]")?.addEventListener("click", () => {
+    dayModal.close();
+    openMessagesForDate(dateStr);
   });
 }
 
@@ -549,6 +557,154 @@ async function loadStats() {
     .map((r) => `<li><strong>${r.dayName}</strong> -${r.count} pool${r.count === 1 ? "" : "s"}</li>`)
     .join("") || "<li class='muted'>No routes yet</li>";
 }
+
+// ---- Messaging ----
+let msgLang = "en";
+let msgCustomers = [];
+let msgCustomersLoaded = false;
+
+async function initMessages() {
+  const dateInput = document.getElementById("msgDate");
+  if (dateInput && !dateInput.value) {
+    const now = new Date();
+    dateInput.value = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+  if (msgCustomersLoaded) return;
+  try {
+    const { customers } = await api("/api/admin/customers");
+    msgCustomers = customers;
+    const select = document.getElementById("msgCustomer");
+    select.innerHTML =
+      `<option value="">Select customer…</option>` +
+      customers
+        .map((c) => `<option value="${c.id}">${esc(c.name)}${c.phone ? "" : " (no phone)"}</option>`)
+        .join("");
+    msgCustomersLoaded = true;
+  } catch (err) {
+    setStatus(document.getElementById("msgStatus"), err.message, "error");
+  }
+}
+
+function renderMsgRecipient(c, message) {
+  const phone = (c.phone || "").replace(/[^\d+]/g, "");
+  const smsHref = phone ? `sms:${phone}?&body=${encodeURIComponent(message)}` : null;
+  return `
+    <article class="msg-recipient">
+      <div>
+        <strong>${esc(c.name)}</strong>
+        <p class="muted">${phone ? esc(c.phone) : "No phone on file"}</p>
+      </div>
+      ${smsHref
+        ? `<a class="btn btn--small" href="${smsHref}">Text</a>`
+        : `<span class="tag tag--warn">Add a phone</span>`}
+    </article>
+  `;
+}
+
+async function composeMessage() {
+  const statusEl = document.getElementById("msgStatus");
+  const preview = document.getElementById("msgPreview");
+  const previewText = document.getElementById("msgPreviewText");
+  const recipientsEl = document.getElementById("msgRecipients");
+  const text = document.getElementById("msgInput").value.trim();
+
+  recipientsEl.innerHTML = "";
+  preview.hidden = true;
+  setStatus(statusEl, "");
+
+  if (!text) {
+    setStatus(statusEl, "Write a message first.", "error");
+    return;
+  }
+
+  const mode = document.querySelector('input[name="msgMode"]:checked')?.value || "individual";
+  let recipients = [];
+  try {
+    if (mode === "individual") {
+      const id = Number(document.getElementById("msgCustomer").value);
+      if (!id) { setStatus(statusEl, "Select a customer.", "error"); return; }
+      const c = msgCustomers.find((x) => x.id === id);
+      if (c) recipients = [c];
+    } else {
+      const date = document.getElementById("msgDate").value;
+      if (!date) { setStatus(statusEl, "Pick a date.", "error"); return; }
+      const { customers } = await api(`/api/admin/day?date=${date}`);
+      recipients = customers;
+    }
+  } catch (err) {
+    setStatus(statusEl, err.message, "error");
+    return;
+  }
+
+  if (!recipients.length) {
+    setStatus(statusEl, "No customers found for that selection.", "error");
+    return;
+  }
+
+  let outgoing = text;
+  if (msgLang === "en") {
+    setStatus(statusEl, "Translating…");
+    try {
+      const { translated } = await api("/api/admin/translate", {
+        method: "POST",
+        body: JSON.stringify({ text, source: "es", target: "en" }),
+      });
+      outgoing = translated || text;
+    } catch (err) {
+      setStatus(statusEl, err.message, "error");
+      return;
+    }
+    setStatus(statusEl, "");
+  }
+
+  previewText.textContent = outgoing;
+  preview.hidden = false;
+
+  const withPhone = recipients.filter((c) => (c.phone || "").trim());
+  recipientsEl.innerHTML = `
+    <h3>Recipients (${recipients.length})</h3>
+    <div class="msg-recipient-list">
+      ${recipients.map((c) => renderMsgRecipient(c, outgoing)).join("")}
+    </div>
+    <p class="fineprint">Tap “Text” to open your phone’s Messages app with the message ready to send${
+      withPhone.length < recipients.length ? ". Customers without a phone number are skipped." : "."
+    }</p>
+  `;
+}
+
+async function openMessagesForDate(dateStr) {
+  switchView("messages");
+  await initMessages();
+  const dayRadio = document.querySelector('input[name="msgMode"][value="day"]');
+  if (dayRadio) dayRadio.checked = true;
+  document.getElementById("msgIndividualRow").hidden = true;
+  document.getElementById("msgDayRow").hidden = false;
+  document.getElementById("msgDate").value = dateStr;
+  document.getElementById("msgInput").focus();
+}
+
+document.querySelectorAll("#view-messages .msg-lang [data-lang]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    msgLang = btn.dataset.lang;
+    document.querySelectorAll("#view-messages .msg-lang [data-lang]").forEach((b) => {
+      const active = b.dataset.lang === msgLang;
+      b.classList.toggle("is-active", active);
+      b.classList.toggle("btn--ghost", !active);
+    });
+  });
+});
+
+document.querySelectorAll('input[name="msgMode"]').forEach((radio) => {
+  radio.addEventListener("change", () => {
+    const mode = document.querySelector('input[name="msgMode"]:checked')?.value;
+    document.getElementById("msgIndividualRow").hidden = mode !== "individual";
+    document.getElementById("msgDayRow").hidden = mode !== "day";
+    document.getElementById("msgRecipients").innerHTML = "";
+    document.getElementById("msgPreview").hidden = true;
+  });
+});
+
+document.getElementById("msgTranslateBtn")?.addEventListener("click", composeMessage);
 
 await Promise.all([renderCalendar(), loadStats()]);
 

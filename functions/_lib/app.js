@@ -47,6 +47,41 @@ async function withAdmin(c, handler) {
   return handler(c, auth);
 }
 
+const LANG_NAMES = { en: "english", es: "spanish" };
+
+/** Translate text using Cloudflare Workers AI, falling back to the free MyMemory API. */
+async function translateText(env, text, source, target) {
+  if (!text || source === target) return text;
+
+  if (env.AI && typeof env.AI.run === "function") {
+    try {
+      const res = await env.AI.run("@cf/meta/m2m100-1.2b", {
+        text,
+        source_lang: LANG_NAMES[source] || source,
+        target_lang: LANG_NAMES[target] || target,
+      });
+      const out = res?.translated_text || res?.response;
+      if (out && out.trim()) return out.trim();
+    } catch {
+      // fall through to the public fallback below
+    }
+  }
+
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    if (r.ok) {
+      const data = await r.json();
+      const out = data?.responseData?.translatedText;
+      if (out && out.trim()) return out.trim();
+    }
+  } catch {
+    // ignore and report unavailable below
+  }
+
+  return null;
+}
+
 app.get("/api/health", async (c) => {
   await ensureAdminSeed(c.env.DB, c.env);
   return json({ ok: true });
@@ -364,6 +399,23 @@ app.get("/api/admin/stats", async (c) =>
       count: (byDay || []).find((r) => r.day === i)?.count || 0,
     }));
     return json({ totalActive: totalRow?.n || 0, routeLoad });
+  })
+);
+
+app.post("/api/admin/translate", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json();
+    const text = String(body.text || "").trim();
+    const source = String(body.source || "es").toLowerCase();
+    const target = String(body.target || "en").toLowerCase();
+    if (!text) return json({ error: "Enter a message to translate." }, 400);
+    if (source === target) return json({ translated: text, source, target });
+
+    const translated = await translateText(ctx.env, text, source, target);
+    if (translated == null) {
+      return json({ error: "Translation service is unavailable right now. Try again in a moment." }, 502);
+    }
+    return json({ translated, source, target });
   })
 );
 
