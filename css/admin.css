@@ -470,6 +470,10 @@
   border-radius:10px;
   margin:0 0 14px;
 }
+.admin-server-notice--warn{
+  background:rgba(180,35,24,.08);
+  color:#8a1f1a;
+}
 .admin-server-notice code{
   font-size:12px;
 }

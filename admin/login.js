@@ -1,4 +1,4 @@
-import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer } from "../js/api-client.js";
+import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer, isApiAvailable } from "../js/api-client.js";
 
 const REMEMBER_EMAIL_KEY = "msg_admin_saved_email";
 const REMEMBER_DEVICE_KEY = "msg_admin_remember_device";
@@ -6,16 +6,23 @@ const REMEMBER_DEVICE_KEY = "msg_admin_remember_device";
 const form = document.getElementById("loginForm");
 const statusEl = document.getElementById("formStatus");
 const serverNotice = document.getElementById("serverNotice");
+const submitBtn = form?.querySelector('button[type="submit"]');
 
 if (isStaticDevServer()) {
   window.location.replace(adminPageUrl("/admin/login.html"));
 }
 
+function showServerNotice(html, warn = false) {
+  if (!serverNotice) return;
+  serverNotice.innerHTML = html;
+  serverNotice.classList.toggle("admin-server-notice--warn", warn);
+}
+
 if (serverNotice) {
-  if (isStaticDevServer() || window.location.hostname === "localhost") {
-    serverNotice.innerHTML = `Admin panel runs at <a href="${getServerOrigin()}/admin/">${getServerOrigin()}/admin/</a>. Keep the server running with <code>cd server && npm start</code>.`;
-  } else {
-    serverNotice.textContent = "Admin login requires the Node.js server deployed with this website.";
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    showServerNotice(
+      `Local admin: keep the server running with <code>cd server && npm start</code>, then use <a href="${getServerOrigin()}/admin/">${getServerOrigin()}/admin/</a>.`
+    );
   }
 }
 
@@ -58,14 +65,25 @@ form?.addEventListener("submit", async (e) => {
   }
 });
 
-(async function checkExistingSession() {
+(async function initLoginPage() {
+  const apiUp = await isApiAvailable();
+
+  if (!apiUp) {
+    showServerNotice(
+      "<strong>Admin login is not available on this host.</strong> The public website can run on static hosting, but the admin panel needs the Node server deployed on the same domain. Deploy the <code>server/</code> folder using Render, Railway, or similar — not GitHub Pages / Netlify static-only.",
+      true
+    );
+    if (submitBtn) submitBtn.disabled = true;
+    return;
+  }
+
   try {
-    await api("/api/health");
     const { admin } = await api("/api/auth/me");
     if (admin) window.location.replace(adminPageUrl("/admin/index.html"));
   } catch (err) {
-    if (statusEl && !statusEl.textContent) {
-      setStatus(statusEl, err.message, "error");
+    if (err.message?.includes("Please sign in") || err.message?.includes("Session expired")) {
+      return;
     }
+    setStatus(statusEl, err.message, "error");
   }
 })();

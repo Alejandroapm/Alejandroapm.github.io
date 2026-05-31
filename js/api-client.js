@@ -61,6 +61,22 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
+function apiMissingMessage() {
+  if (isLocalDevHost(window.location.hostname)) {
+    return `Start the server locally: open a terminal, run cd server && npm start, then visit ${getServerOrigin()}/admin/`;
+  }
+  return "This site is hosted as static files only. Admin login requires deploying the Node server (see README — use Render, Railway, or a VPS). Uploading HTML alone is not enough.";
+}
+
+export async function isApiAvailable() {
+  try {
+    const res = await fetchWithTimeout(`${API}/api/health`, { credentials: "include" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function api(path, options = {}) {
   let res;
   try {
@@ -77,17 +93,18 @@ export async function api(path, options = {}) {
     throw new Error(
       isStaticDevServer()
         ? `Cannot reach the admin server at ${getServerOrigin()}. Run cd server && npm start, then open ${getServerOrigin()}/admin/`
-        : "Cannot reach the admin server. Deploy the Node server with your site, or contact your host."
+        : apiMissingMessage()
     );
   }
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 405) {
-      throw new Error(
-        "Admin login requires the Node server (not static hosting alone). Deploy the server folder with your site."
-      );
+    if (res.status === 401) {
+      throw new Error(data.error || "Please sign in.");
+    }
+    if (res.status === 404 || res.status === 405) {
+      throw new Error(apiMissingMessage());
     }
     throw new Error(data.error || `Error ${res.status}`);
   }
