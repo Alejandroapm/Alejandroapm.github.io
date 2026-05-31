@@ -105,7 +105,9 @@ export function createWorkdayUI(deps) {
         <p class="muted">${t("startBlurb")}</p>
         <div class="form-row">
           <label for="workdayDate">${t("date")}</label>
-          <input type="date" id="workdayDate" value="${today}" />
+          <div class="date-input-wrap">
+            <input type="date" id="workdayDate" value="${today}" />
+          </div>
         </div>
         <p class="workday-start__count muted" id="workdayCount">${t("checkingSchedule")}</p>
         <button type="button" class="btn btn--block" id="startDayBtn">${t("startDay")}</button>

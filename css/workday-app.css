@@ -39,9 +39,28 @@
   align-items: center;
 }
 
-.workday-app-page .admin-topbar__actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.workday-app-page .workday-start,
+.workday-app-page .workday-start.card {
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.workday-app-page .date-input-wrap {
+  width: 100%;
+  max-width: 100%;
+}
+
+.workday-app-page .workday-start input[type="date"],
+.workday-app-page .date-input-wrap input[type="date"] {
+  width: 100%;
+  max-width: 100%;
+}
+
+.workday-app-page .admin-content,
+.workday-app-page #view-workday {
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 @media (max-width: 640px) {

@@ -1,6 +1,7 @@
 import { milesBetween } from "./florida.js";
 import { buildOptimizedRoute } from "./routeBuilder.js";
 import { customersForDate, getRouteDepot, DAY_NAMES } from "./db.js";
+import { assertWorkdayAccess } from "./scope.js";
 
 function publicStop(s) {
   return {
@@ -52,9 +53,10 @@ export async function getWorkdayById(db, id) {
   return publicWorkday(w, await stopsFor(db, id));
 }
 
-export async function getActiveWorkday(db) {
+export async function getActiveWorkday(db, auth) {
   const w = await db
-    .prepare("SELECT * FROM work_days WHERE status = 'active' ORDER BY started_at DESC LIMIT 1")
+    .prepare("SELECT * FROM work_days WHERE status = 'active' AND owner_id = ? ORDER BY started_at DESC LIMIT 1")
+    .bind(auth.userId)
     .first();
   if (!w) return null;
   return publicWorkday(w, await stopsFor(db, w.id));
@@ -104,20 +106,19 @@ async function logEvent(db, workDayId, { type, stopId = null, customerId = null,
   return miles;
 }
 
-export async function startWorkday(db, env, dateStr, coords = null) {
-  const existing = await getActiveWorkday(db);
+export async function startWorkday(db, env, dateStr, auth, coords = null) {
+  const existing = await getActiveWorkday(db, auth);
   if (existing) return { workday: existing, resumed: true };
 
-  const scheduled = await customersForDate(db, dateStr);
+  const scheduled = await customersForDate(db, dateStr, auth);
   const scheduledIds = new Set(scheduled.map((c) => c.id));
-  const { results: rawCustomers } = await db.prepare("SELECT * FROM customers WHERE active = 1").all();
-  const scheduledRows = (rawCustomers || []).filter((c) => scheduledIds.has(c.id));
+  const scheduledRows = scheduled.filter((c) => scheduledIds.has(c.id));
   const notesById = new Map(scheduledRows.map((c) => [c.id, c.notes || ""]));
 
   let ordered = [];
   let unmapped = [];
   if (scheduledRows.length) {
-    const depot = await getRouteDepot(db);
+    const depot = await getRouteDepot(db, auth.userId);
     const route = await buildOptimizedRoute(db, scheduledRows, depot, env);
     ordered = route.stops || [];
     unmapped = route.unmapped || [];
@@ -126,10 +127,10 @@ export async function startWorkday(db, env, dateStr, coords = null) {
   const now = Date.now();
   const res = await db
     .prepare(
-      `INSERT INTO work_days (date, status, started_at, start_lat, start_lng, total_miles, created_at)
-       VALUES (?, 'active', ?, ?, ?, 0, ?)`
+      `INSERT INTO work_days (date, status, started_at, start_lat, start_lng, total_miles, owner_id, created_at)
+       VALUES (?, 'active', ?, ?, ?, 0, ?, ?)`
     )
-    .bind(dateStr, now, coords?.lat ?? null, coords?.lng ?? null, now)
+    .bind(dateStr, now, coords?.lat ?? null, coords?.lng ?? null, auth.userId, now)
     .run();
   const workDayId = res.meta.last_row_id;
 
@@ -147,7 +148,7 @@ export async function startWorkday(db, env, dateStr, coords = null) {
           workDayId,
           c.id,
           c.name || "",
-          c.fullAddress || "",
+          c.fullAddress || c.address || "",
           c.phone || "",
           lat,
           lng,
@@ -165,8 +166,8 @@ export async function startWorkday(db, env, dateStr, coords = null) {
   return { workday: await getWorkdayById(db, workDayId), resumed: false };
 }
 
-export async function logNavigate(db, workDayId, stopId = null, coords = null) {
-  const w = await db.prepare("SELECT id FROM work_days WHERE id = ?").bind(workDayId).first();
+export async function logNavigate(db, workDayId, auth, stopId = null, coords = null) {
+  const w = await assertWorkdayAccess(db, workDayId, auth);
   if (!w) return null;
   const stop = stopId
     ? await db.prepare("SELECT customer_id FROM work_stops WHERE id = ?").bind(stopId).first()
@@ -175,8 +176,16 @@ export async function logNavigate(db, workDayId, stopId = null, coords = null) {
   return getWorkdayById(db, workDayId);
 }
 
-export async function startJob(db, stopId, coords = null) {
+async function workdayForStop(db, stopId, auth) {
   const stop = await db.prepare("SELECT * FROM work_stops WHERE id = ?").bind(stopId).first();
+  if (!stop) return null;
+  const w = await assertWorkdayAccess(db, stop.work_day_id, auth);
+  if (!w) return null;
+  return stop;
+}
+
+export async function startJob(db, stopId, auth, coords = null) {
+  const stop = await workdayForStop(db, stopId, auth);
   if (!stop) return null;
   const now = Date.now();
   const miles = await logEvent(db, stop.work_day_id, {
@@ -197,8 +206,8 @@ export async function startJob(db, stopId, coords = null) {
   return getWorkdayById(db, stop.work_day_id);
 }
 
-export async function completeJob(db, stopId, coords = null, notes = null) {
-  const stop = await db.prepare("SELECT * FROM work_stops WHERE id = ?").bind(stopId).first();
+export async function completeJob(db, stopId, auth, coords = null, notes = null) {
+  const stop = await workdayForStop(db, stopId, auth);
   if (!stop) return null;
   const now = Date.now();
   await logEvent(db, stop.work_day_id, {
@@ -214,23 +223,23 @@ export async function completeJob(db, stopId, coords = null, notes = null) {
   return getWorkdayById(db, stop.work_day_id);
 }
 
-export async function skipStop(db, stopId, coords = null) {
-  const stop = await db.prepare("SELECT * FROM work_stops WHERE id = ?").bind(stopId).first();
+export async function skipStop(db, stopId, auth, coords = null) {
+  const stop = await workdayForStop(db, stopId, auth);
   if (!stop) return null;
   await logEvent(db, stop.work_day_id, { type: "skip", stopId, customerId: stop.customer_id, coords });
   await db.prepare("UPDATE work_stops SET status = 'skipped' WHERE id = ?").bind(stopId).run();
   return getWorkdayById(db, stop.work_day_id);
 }
 
-export async function saveStopNotes(db, stopId, notes) {
-  const stop = await db.prepare("SELECT work_day_id FROM work_stops WHERE id = ?").bind(stopId).first();
+export async function saveStopNotes(db, stopId, auth, notes) {
+  const stop = await workdayForStop(db, stopId, auth);
   if (!stop) return null;
   await db.prepare("UPDATE work_stops SET notes = ? WHERE id = ?").bind(String(notes || ""), stopId).run();
   return getWorkdayById(db, stop.work_day_id);
 }
 
-export async function endWorkday(db, workDayId, coords = null) {
-  const w = await db.prepare("SELECT * FROM work_days WHERE id = ?").bind(workDayId).first();
+export async function endWorkday(db, workDayId, auth, coords = null) {
+  const w = await assertWorkdayAccess(db, workDayId, auth);
   if (!w) return null;
   await logEvent(db, workDayId, { type: "end_day", coords });
   await db.prepare("UPDATE work_days SET status = 'ended', ended_at = ? WHERE id = ?").bind(Date.now(), workDayId).run();
@@ -260,9 +269,12 @@ function fmtET(ts) {
 }
 
 /** Builds a per-stop CSV (one row per stop) with daily totals repeated per day. */
-export async function exportWorkdaysCsv(db) {
+export async function exportWorkdaysCsv(db, auth) {
+  const scope = auth.isSuper ? "" : " WHERE owner_id = ?";
+  const binds = auth.isSuper ? [] : [auth.userId];
   const { results: days } = await db
-    .prepare("SELECT * FROM work_days ORDER BY started_at ASC")
+    .prepare(`SELECT * FROM work_days${scope} ORDER BY started_at ASC`)
+    .bind(...binds)
     .all();
 
   const header = [
@@ -270,6 +282,7 @@ export async function exportWorkdaysCsv(db) {
     "Arrived (ET)", "Job start (ET)", "Job complete (ET)", "Job minutes",
     "Miles to stop", "Day total miles", "Day start (ET)", "Day end (ET)", "Day minutes",
   ];
+  if (auth.isSuper) header.unshift("Owner ID");
   const lines = [header.map(csvEscape).join(",")];
 
   for (const w of days || []) {
@@ -278,10 +291,11 @@ export async function exportWorkdaysCsv(db) {
     const dayMin = w.started_at && w.ended_at ? Math.round((w.ended_at - w.started_at) / 60000) : "";
     const dayMiles = Number(w.total_miles || 0).toFixed(2);
     const stops = await stopsFor(db, w.id);
+    const ownerPrefix = auth.isSuper ? [w.owner_id ?? ""] : [];
 
     if (!stops.length) {
       lines.push(
-        [w.date, dayName, "", "", "", "no stops", "", "", "", "", "", dayMiles, fmtET(w.started_at), fmtET(w.ended_at), dayMin]
+        [...ownerPrefix, w.date, dayName, "", "", "", "no stops", "", "", "", "", "", dayMiles, fmtET(w.started_at), fmtET(w.ended_at), dayMin]
           .map(csvEscape)
           .join(",")
       );
@@ -292,6 +306,7 @@ export async function exportWorkdaysCsv(db) {
       const jobMin = s.started_at && s.completed_at ? Math.round((s.completed_at - s.started_at) / 60000) : "";
       lines.push(
         [
+          ...ownerPrefix,
           w.date, dayName, s.seq, s.customer_name, s.address, s.status,
           fmtET(s.arrived_at), fmtET(s.started_at), fmtET(s.completed_at), jobMin,
           s.miles_from_prev != null ? Number(s.miles_from_prev).toFixed(2) : "",

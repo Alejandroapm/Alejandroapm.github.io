@@ -2,12 +2,21 @@ import bcrypt from "bcryptjs";
 import { formatAddress, geocodeAddress } from "./geocode.js";
 import { isInFlorida } from "./florida.js";
 import { DEFAULT_DEPOT } from "./routing.js";
+import { ownerClause } from "./scope.js";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function publicAdmin(row) {
   if (!row) return null;
-  return { id: row.id, email: row.email, name: row.name };
+  const role = row.role || "user";
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name || "",
+    role,
+    isSuper: role === "super",
+    active: row.active == null ? true : !!row.active,
+  };
 }
 
 export function publicCustomer(row) {
@@ -29,6 +38,8 @@ export function publicCustomer(row) {
     monthlyRate: row.monthly_rate,
     notes: row.notes || "",
     active: !!row.active,
+    ownerId: row.owner_id ?? null,
+    ownerName: row.owner_name || row.owner_email || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -179,40 +190,75 @@ export async function ensureSchema(db) {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id)"),
   ]);
+  await runMigrations(db, null);
+}
+
+async function columnExists(db, table, column) {
+  const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+  return (results || []).some((c) => c.name === column);
+}
+
+async function addColumn(db, table, column, definition) {
+  if (!(await columnExists(db, table, column))) {
+    await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  }
+}
+
+/** Adds multi-user columns and backfills existing rows to the super admin. */
+export async function runMigrations(db, env) {
+  await addColumn(db, "admins", "role", "TEXT NOT NULL DEFAULT 'user'");
+  await addColumn(db, "admins", "active", "INTEGER NOT NULL DEFAULT 1");
+  await addColumn(db, "customers", "owner_id", "INTEGER");
+  await addColumn(db, "work_days", "owner_id", "INTEGER");
+  await addColumn(db, "message_logs", "owner_id", "INTEGER");
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_customers_owner ON customers(owner_id)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_work_days_owner ON work_days(owner_id)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_message_logs_owner ON message_logs(owner_id)").run();
+
+  const superEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
+  if (superEmail) {
+    await db.prepare("UPDATE admins SET role = 'super' WHERE lower(email) = ?").bind(superEmail).run();
+  }
+
+  const superRow = await db
+    .prepare("SELECT id FROM admins WHERE role = 'super' ORDER BY id ASC LIMIT 1")
+    .first();
+  if (superRow?.id) {
+    await db.prepare("UPDATE customers SET owner_id = ? WHERE owner_id IS NULL").bind(superRow.id).run();
+    await db.prepare("UPDATE work_days SET owner_id = ? WHERE owner_id IS NULL").bind(superRow.id).run();
+    await db.prepare("UPDATE message_logs SET owner_id = ? WHERE owner_id IS NULL").bind(superRow.id).run();
+  }
 }
 
 const BCRYPT_COST = 12;
 
 /**
- * Keeps the admin account in sync with the ADMIN_EMAIL / ADMIN_PASSWORD env vars,
- * which are the single source of truth. Safe to call on every request:
- * - removes any admin row that doesn't match the configured email
- * - creates the admin if missing
- * - re-hashes the password only when it actually changed (no needless rehashing,
- *   and the plaintext password is never logged or returned)
+ * Ensures the env-configured super admin exists and stays in sync with ADMIN_EMAIL / ADMIN_PASSWORD.
+ * Other team accounts are managed by the super user and are never deleted here.
  */
 export async function ensureAdminSeed(db, env) {
   await ensureSchema(db);
+  await runMigrations(db, env);
   const adminEmail = String(env.ADMIN_EMAIL || "").trim().toLowerCase();
   const adminPassword = String(env.ADMIN_PASSWORD || "");
   if (!adminEmail || !adminPassword) return;
-
-  await db.prepare("DELETE FROM admins WHERE lower(email) <> ?").bind(adminEmail).run();
 
   const existing = await findAdminByEmail(db, adminEmail);
   if (!existing) {
     const hash = bcrypt.hashSync(adminPassword, BCRYPT_COST);
     await db.prepare(`
-      INSERT INTO admins (email, password_hash, name, created_at) VALUES (?, ?, ?, ?)
-    `).bind(adminEmail, hash, "Administrator", Date.now()).run();
+      INSERT INTO admins (email, password_hash, name, role, active, created_at)
+      VALUES (?, ?, ?, 'super', 1, ?)
+    `).bind(adminEmail, hash, "Super Admin", Date.now()).run();
     return;
   }
 
-  if (!bcrypt.compareSync(adminPassword, existing.password_hash)) {
-    const hash = bcrypt.hashSync(adminPassword, BCRYPT_COST);
-    await db.prepare("UPDATE admins SET password_hash = ? WHERE id = ?")
-      .bind(hash, existing.id).run();
-  }
+  const hash = bcrypt.compareSync(adminPassword, existing.password_hash)
+    ? existing.password_hash
+    : bcrypt.hashSync(adminPassword, BCRYPT_COST);
+  await db.prepare(`
+    UPDATE admins SET password_hash = ?, role = 'super', active = 1 WHERE id = ?
+  `).bind(hash, existing.id).run();
 }
 
 export async function geocodeAndSaveCustomer(db, id, addressParts, pickedCoords = null, env = null) {
@@ -265,19 +311,24 @@ export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-export async function getActiveCustomers(db) {
-  const { results } = await db.prepare("SELECT * FROM customers WHERE active = 1 ORDER BY name ASC").all();
+export async function getActiveCustomers(db, auth) {
+  const scope = ownerClause(auth, "customers");
+  const { results } = await db
+    .prepare(`SELECT customers.* FROM customers WHERE customers.active = 1${scope.sql} ORDER BY customers.name ASC`)
+    .bind(...scope.binds)
+    .all();
   return results || [];
 }
 
-export async function customersForDate(db, dateStr) {
+export async function customersForDate(db, dateStr, auth) {
   const d = new Date(`${dateStr}T12:00:00`);
   if (Number.isNaN(d.getTime())) return [];
 
   const dow = d.getDay();
-  const customers = await getActiveCustomers(db);
+  const customers = await getActiveCustomers(db, auth);
+  const customerIds = new Set(customers.map((c) => c.id));
   const { results: overrides } = await db.prepare("SELECT * FROM service_overrides WHERE date = ?").bind(dateStr).all();
-  const list = overrides || [];
+  const list = (overrides || []).filter((o) => customerIds.has(o.customer_id));
 
   const skipIds = new Set(list.filter((o) => o.type === "skip").map((o) => o.customer_id));
   const extraIds = list.filter((o) => o.type === "extra").map((o) => o.customer_id);
@@ -297,19 +348,23 @@ export async function customersForDate(db, dateStr) {
   }));
 }
 
-export async function calendarSummary(db, year, month) {
+export async function calendarSummary(db, year, month, auth) {
   const end = new Date(year, month, 0);
   const summary = {};
   for (let day = 1; day <= end.getDate(); day++) {
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const list = await customersForDate(db, dateStr);
+    const list = await customersForDate(db, dateStr, auth);
     summary[dateStr] = { count: list.length, customers: list };
   }
   return summary;
 }
 
-export async function getRouteStartSetting(db) {
-  const row = await db.prepare("SELECT value FROM settings WHERE key = 'route_start'").first();
+function routeStartKey(ownerId) {
+  return `route_start_${ownerId}`;
+}
+
+export async function getRouteStartSetting(db, ownerId) {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = ?").bind(routeStartKey(ownerId)).first();
   if (row) {
     try {
       const parsed = JSON.parse(row.value);
@@ -335,7 +390,7 @@ export async function getRouteStartSetting(db) {
   };
 }
 
-export async function saveRouteStartSetting(db, parts, pickedCoords = null, env = null) {
+export async function saveRouteStartSetting(db, ownerId, parts, pickedCoords = null, env = null) {
   let lat = null;
   let lng = null;
   if (pickedCoords && isInFlorida(pickedCoords.lat, pickedCoords.lng)) {
@@ -356,16 +411,101 @@ export async function saveRouteStartSetting(db, parts, pickedCoords = null, env 
     label: `${parts.street}, ${parts.city}, FL ${parts.zip}`,
   };
   await db.prepare(`
-    INSERT INTO settings (key, value, updated_at) VALUES ('route_start', ?, ?)
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `).bind(JSON.stringify(saved), Date.now()).run();
+  `).bind(routeStartKey(ownerId), JSON.stringify(saved), Date.now()).run();
   return saved;
 }
 
-export async function getRouteDepot(db) {
-  const start = await getRouteStartSetting(db);
+export async function getRouteDepot(db, ownerId) {
+  const start = await getRouteStartSetting(db, ownerId);
   if (start.lat == null || start.lng == null) {
     return { ...DEFAULT_DEPOT, label: start.label || DEFAULT_DEPOT.label };
   }
   return { lat: start.lat, lng: start.lng, label: start.label || "Route start" };
+}
+
+export async function listCustomers(db, auth, all = false) {
+  const scope = ownerClause(auth, "customers");
+  const activeClause = all ? "" : " AND customers.active = 1";
+  const sql = auth.isSuper
+    ? `SELECT customers.*, admins.name AS owner_name, admins.email AS owner_email
+       FROM customers
+       LEFT JOIN admins ON admins.id = customers.owner_id
+       WHERE 1=1${activeClause}${scope.sql}
+       ORDER BY customers.active DESC, customers.name ASC`
+    : `SELECT customers.* FROM customers WHERE 1=1${activeClause}${scope.sql} ORDER BY customers.name ASC`;
+  const { results } = await db.prepare(sql).bind(...scope.binds).all();
+  return (results || []).map(publicCustomer);
+}
+
+export async function getCustomerRow(db, customerId, auth) {
+  const row = await db.prepare("SELECT * FROM customers WHERE id = ?").bind(customerId).first();
+  if (!row) return null;
+  if (!auth.isSuper && row.owner_id !== auth.userId) return null;
+  if (!auth.isSuper) return row;
+  const owner = row.owner_id
+    ? await db.prepare("SELECT name, email FROM admins WHERE id = ?").bind(row.owner_id).first()
+    : null;
+  return { ...row, owner_name: owner?.name || "", owner_email: owner?.email || "" };
+}
+
+export async function listTeamUsers(db) {
+  const { results } = await db.prepare(`
+    SELECT a.*,
+      (SELECT COUNT(*) FROM customers c WHERE c.owner_id = a.id AND c.active = 1) AS active_customers
+    FROM admins a
+    ORDER BY CASE WHEN a.role = 'super' THEN 0 ELSE 1 END, a.email ASC
+  `).all();
+  return (results || []).map((r) => ({
+    ...publicAdmin(r),
+    activeCustomers: r.active_customers || 0,
+  }));
+}
+
+export async function createTeamUser(db, { email, password, name }) {
+  const normalized = String(email || "").trim().toLowerCase();
+  const pwd = String(password || "");
+  if (!normalized || !pwd) throw new Error("Email and password are required.");
+  if (await findAdminByEmail(db, normalized)) throw new Error("An account with that email already exists.");
+  const hash = bcrypt.hashSync(pwd, BCRYPT_COST);
+  const res = await db.prepare(`
+    INSERT INTO admins (email, password_hash, name, role, active, created_at)
+    VALUES (?, ?, ?, 'user', 1, ?)
+  `).bind(normalized, hash, String(name || "").trim(), Date.now()).run();
+  return findAdminById(db, res.meta.last_row_id);
+}
+
+export async function updateTeamUser(db, id, { name, password, active }) {
+  const user = await findAdminById(db, id);
+  if (!user) return null;
+  if (user.role === "super" && active === false) throw new Error("Cannot restrict the super account.");
+
+  const fields = [];
+  const binds = [];
+  if (name !== undefined) {
+    fields.push("name = ?");
+    binds.push(String(name || "").trim());
+  }
+  if (password) {
+    fields.push("password_hash = ?");
+    binds.push(bcrypt.hashSync(String(password), BCRYPT_COST));
+  }
+  if (active !== undefined && user.role !== "super") {
+    fields.push("active = ?");
+    binds.push(active ? 1 : 0);
+  }
+  if (!fields.length) return user;
+
+  binds.push(id);
+  await db.prepare(`UPDATE admins SET ${fields.join(", ")} WHERE id = ?`).bind(...binds).run();
+  return findAdminById(db, id);
+}
+
+export async function deleteTeamUser(db, id) {
+  const user = await findAdminById(db, id);
+  if (!user) return false;
+  if (user.role === "super") throw new Error("Cannot delete the super account.");
+  await db.prepare("DELETE FROM admins WHERE id = ?").bind(id).run();
+  return true;
 }

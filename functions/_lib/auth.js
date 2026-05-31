@@ -9,7 +9,8 @@ function secretKey(env) {
 }
 
 export async function signToken(env, user) {
-  return new SignJWT({ sub: String(user.id), role: "admin", email: user.email })
+  const role = user.role || "user";
+  return new SignJWT({ sub: String(user.id), role, email: user.email })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("7d")
     .sign(secretKey(env));
@@ -41,15 +42,25 @@ export function getTokenFromRequest(req) {
   return match?.[1] || null;
 }
 
-export async function requireAdmin(req, env) {
+export async function requireAdmin(req, env, db) {
   const token = getTokenFromRequest(req);
   if (!token) return { error: "Please sign in.", status: 401 };
 
   const payload = await verifyToken(env, token);
   if (!payload) return { error: "Session expired. Please sign in again.", status: 401 };
-  if (payload.role !== "admin") return { error: "Admin access only.", status: 403 };
 
-  return { userId: Number(payload.sub), email: payload.email };
+  const admin = await db.prepare("SELECT * FROM admins WHERE id = ?").bind(Number(payload.sub)).first();
+  if (!admin) return { error: "Account not found.", status: 401 };
+  if (!admin.active) return { error: "Account access has been restricted.", status: 403 };
+
+  const role = admin.role || "user";
+  return {
+    userId: admin.id,
+    email: admin.email,
+    name: admin.name || "",
+    role,
+    isSuper: role === "super",
+  };
 }
 
 export { bcrypt };

@@ -8,6 +8,9 @@ const admin = await requireAdmin();
 if (!admin) throw new Error("redirect");
 
 document.getElementById("adminEmail").textContent = admin.email;
+if (admin.isSuper) {
+  document.querySelector('[data-view="team"]')?.removeAttribute("hidden");
+}
 
 initLangToggle();
 let currentView = "calendar";
@@ -44,7 +47,13 @@ function refreshCurrentView() {
   else if (currentView === "messages") initMessages();
   else if (currentView === "workday") renderWorkday();
   else if (currentView === "map") loadCustomerMap();
+  else if (currentView === "team") loadTeamUsers();
   else if (currentView === "route" && routeDateInput.value) loadRoute(routeDateInput.value);
+}
+
+function ownerBadge(c) {
+  if (!admin.isSuper || !c.ownerName) return "";
+  return `<span class="tag tag--owner">${t("ownerBadge")}: ${esc(c.ownerName)}</span>`;
 }
 
 onLangChange(() => {
@@ -70,6 +79,7 @@ const views = {
   customers: document.getElementById("view-customers"),
   messages: document.getElementById("view-messages"),
   workday: document.getElementById("view-workday"),
+  team: document.getElementById("view-team"),
   add: document.getElementById("view-add"),
 };
 
@@ -112,6 +122,7 @@ function switchView(name) {
   if (name === "map") {
     ensureCustomerMap().then(() => loadCustomerMap());
   }
+  if (name === "team") loadTeamUsers();
 }
 
 document.getElementById("prevMonth")?.addEventListener("click", () => {
@@ -403,6 +414,7 @@ function renderDayCustomer(c, dateStr) {
     <article class="day-customer" data-id="${c.id}">
       <div class="day-customer__head">
         <strong>${esc(c.name)}</strong>
+        ${ownerBadge(c)}
         ${extra ? `<span class="tag tag--extra">${t("extraVisit")}</span>` : ""}
         ${skipped ? `<span class="tag tag--skip">${t("skipped")}</span>` : ""}
       </div>
@@ -598,6 +610,7 @@ async function loadCustomerList() {
       <div>
         <strong>${esc(c.name)}</strong>
         <span class="tag">${dayName(c.serviceDayOfWeek)}</span>
+        ${ownerBadge(c)}
         ${c.active ? "" : `<span class="tag tag--skip">${t("inactive")}</span>`}
         ${c.lat != null ? `<span class="tag tag--mapped">${t("onMap")}</span>` : `<span class="tag tag--warn">${t("notMapped")}</span>`}
         <p class="muted">${esc(formatAddress(c))}</p>
@@ -648,6 +661,118 @@ async function loadStats() {
     .map((r) => `<li><strong>${dayName(r.day ?? r.dayOfWeek)}</strong> -${poolsLabel(r.count)}</li>`)
     .join("") || `<li class='muted'>${t("noRoutes")}</li>`;
 }
+
+// ---- Team (super user) ----
+function renderTeamUser(u) {
+  const roleTag = u.isSuper
+    ? `<span class="tag tag--super">${t("teamSuper")}</span>`
+    : `<span class="tag">${t("teamUser")}</span>`;
+  const statusTag = u.active
+    ? `<span class="tag tag--mapped">${t("teamActive")}</span>`
+    : `<span class="tag tag--skip">${t("teamRestricted")}</span>`;
+  const actions = u.isSuper ? "" : `
+    <div class="team-user-row__actions">
+      ${u.active
+        ? `<button type="button" class="btn btn--ghost btn--small" data-restrict-user="${u.id}">${t("teamRestrict")}</button>`
+        : `<button type="button" class="btn btn--ghost btn--small" data-restore-user="${u.id}">${t("teamRestore")}</button>`}
+      <button type="button" class="btn btn--ghost btn--small" data-reset-pwd="${u.id}">${t("teamResetPwd")}</button>
+      <button type="button" class="btn btn--ghost btn--small btn--danger" data-delete-user="${u.id}">${t("teamDelete")}</button>
+    </div>`;
+  return `
+    <article class="team-user-row card${u.active ? "" : " team-user-row--restricted"}">
+      <div>
+        <strong>${esc(u.name || u.email)}</strong>
+        ${roleTag}
+        ${statusTag}
+        <p class="muted">${esc(u.email)}</p>
+        <p class="fineprint">${u.activeCustomers ?? 0} ${t("teamPools")}</p>
+      </div>
+      ${actions}
+    </article>
+  `;
+}
+
+async function loadTeamUsers() {
+  if (!admin.isSuper) return;
+  const el = document.getElementById("teamUserList");
+  if (!el) return;
+  el.innerHTML = `<p class="muted">${t("loading")}</p>`;
+  try {
+    const { users } = await api("/api/admin/users");
+    el.innerHTML = users.length
+      ? users.map(renderTeamUser).join("")
+      : `<p class="muted">${t("teamNoUsers")}</p>`;
+
+    el.querySelectorAll("[data-restrict-user]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm(t("teamRestrictConfirm"))) return;
+        await api(`/api/admin/users/${btn.dataset.restrictUser}`, {
+          method: "PATCH",
+          body: JSON.stringify({ active: false }),
+        });
+        loadTeamUsers();
+      });
+    });
+
+    el.querySelectorAll("[data-restore-user]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await api(`/api/admin/users/${btn.dataset.restoreUser}`, {
+          method: "PATCH",
+          body: JSON.stringify({ active: true }),
+        });
+        loadTeamUsers();
+      });
+    });
+
+    el.querySelectorAll("[data-reset-pwd]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const password = prompt(t("teamPwdPrompt"));
+        if (!password) return;
+        if (password.length < 8) {
+          alert(t("teamPwdShort"));
+          return;
+        }
+        await api(`/api/admin/users/${btn.dataset.resetPwd}`, {
+          method: "PATCH",
+          body: JSON.stringify({ password }),
+        });
+        alert(t("teamUpdated"));
+      });
+    });
+
+    el.querySelectorAll("[data-delete-user]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm(t("teamDeleteConfirm"))) return;
+        await api(`/api/admin/users/${btn.dataset.deleteUser}`, { method: "DELETE" });
+        loadTeamUsers();
+      });
+    });
+  } catch (err) {
+    el.innerHTML = `<p class="form-status--error">${esc(err.message)}</p>`;
+  }
+}
+
+document.getElementById("teamAddForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const statusEl = document.getElementById("teamAddStatus");
+  const form = e.target;
+  try {
+    setStatus(statusEl, t("saving"));
+    await api("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify({
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        password: form.password.value,
+      }),
+    });
+    form.reset();
+    setStatus(statusEl, t("teamCreated"), "success");
+    loadTeamUsers();
+  } catch (err) {
+    setStatus(statusEl, err.message, "error");
+  }
+});
 
 // ---- Messaging ----
 let msgLang = "en";

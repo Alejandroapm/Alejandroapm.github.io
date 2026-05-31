@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS admins (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   name TEXT,
+  role TEXT NOT NULL DEFAULT 'user',
+  active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
 
@@ -23,6 +25,7 @@ CREATE TABLE IF NOT EXISTS customers (
   monthly_rate REAL,
   notes TEXT,
   active INTEGER NOT NULL DEFAULT 1,
+  owner_id INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -52,6 +55,7 @@ CREATE TABLE IF NOT EXISTS message_logs (
   original_text TEXT NOT NULL,
   sent_text TEXT NOT NULL,
   language TEXT NOT NULL,
+  owner_id INTEGER,
   created_at INTEGER NOT NULL
 );
 
@@ -64,6 +68,7 @@ CREATE TABLE IF NOT EXISTS work_days (
   start_lat REAL,
   start_lng REAL,
   total_miles REAL DEFAULT 0,
+  owner_id INTEGER,
   created_at INTEGER NOT NULL
 );
 
@@ -101,8 +106,11 @@ CREATE TABLE IF NOT EXISTS work_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_customers_day ON customers(service_day_of_week);
+CREATE INDEX IF NOT EXISTS idx_customers_owner ON customers(owner_id);
 CREATE INDEX IF NOT EXISTS idx_overrides_date ON service_overrides(date);
 CREATE INDEX IF NOT EXISTS idx_message_logs_created ON message_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_message_logs_owner ON message_logs(owner_id);
 CREATE INDEX IF NOT EXISTS idx_work_days_status ON work_days(status);
+CREATE INDEX IF NOT EXISTS idx_work_days_owner ON work_days(owner_id);
 CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id);
 CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id);

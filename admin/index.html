@@ -76,6 +76,8 @@
 
           <button type="button" class="admin-nav__btn" data-view="messages" data-i18n="navMessages">Messages</button>
 
+          <button type="button" class="admin-nav__btn admin-nav__btn--super" data-view="team" data-i18n="navTeam" hidden>Team</button>
+
           <button type="button" class="admin-nav__btn" data-view="add" data-i18n="navAdd">+ Add customer</button>
 
         </nav>
@@ -533,6 +535,68 @@
             <div id="msgLogList"></div>
 
           </div>
+
+        </section>
+
+        <!-- Team (super user only) -->
+
+        <section class="admin-view" id="view-team" hidden>
+
+          <div class="admin-toolbar">
+
+            <div>
+
+              <h1 data-i18n="teamTitle">Team accounts</h1>
+
+              <p class="muted section__lead" data-i18n="teamLead">Create accounts for each route operator. Restricted users cannot sign in. You see all customers, messages, and schedules across the team.</p>
+
+            </div>
+
+          </div>
+
+          <div class="card team-add-form">
+
+            <h2 data-i18n="teamAddTitle">Add team member</h2>
+
+            <form id="teamAddForm" class="grid grid--2">
+
+              <div class="form-row">
+
+                <label for="teamName" data-i18n="teamName">Name</label>
+
+                <input id="teamName" name="name" required placeholder="Alex" data-i18n-ph="teamNamePh" />
+
+              </div>
+
+              <div class="form-row">
+
+                <label for="teamEmail" data-i18n="loginEmail">Email</label>
+
+                <input id="teamEmail" name="email" type="email" required autocomplete="off" />
+
+              </div>
+
+              <div class="form-row">
+
+                <label for="teamPassword" data-i18n="teamPassword">Password</label>
+
+                <input id="teamPassword" name="password" type="password" required autocomplete="new-password" minlength="8" />
+
+              </div>
+
+              <div class="form-row team-add-form__actions">
+
+                <button type="submit" class="btn btn--small" data-i18n="teamCreate">Create account</button>
+
+              </div>
+
+            </form>
+
+            <p class="fineprint form-status" id="teamAddStatus" aria-live="polite"></p>
+
+          </div>
+
+          <div id="teamUserList" class="team-user-list"></div>
 
         </section>
 
