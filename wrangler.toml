@@ -20,4 +20,4 @@ database_id = "72534135-297c-416d-a347-9b21781c36a6"
 
 [vars]
 # Set secrets in the Cloudflare dashboard (never commit passwords):
-# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET 
+# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET
