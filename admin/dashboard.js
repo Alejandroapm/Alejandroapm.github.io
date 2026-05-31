@@ -65,10 +65,16 @@ const workdayUI = createWorkdayUI({
 const initWorkday = () => workdayUI.init();
 const renderWorkday = () => workdayUI.render();
 
+async function initWorkLog() {
+  initWorkdayExportDates(fmtDate);
+  if (admin.isSuper) await ensureMsgLogTeamOptions();
+}
+
 function refreshCurrentView() {
   if (currentView === "customers") loadCustomerList();
   else if (currentView === "messages") initMessages();
   else if (currentView === "workday") renderWorkday();
+  else if (currentView === "worklog") initWorkLog();
   else if (currentView === "map") loadCustomerMap();
   else if (currentView === "team") loadTeamUsers();
   else if (currentView === "route" && routeDateInput.value) loadRoute(routeDateInput.value);
@@ -106,6 +112,7 @@ const views = {
   customers: document.getElementById("view-customers"),
   messages: document.getElementById("view-messages"),
   workday: document.getElementById("view-workday"),
+  worklog: document.getElementById("view-worklog"),
   team: document.getElementById("view-team"),
   add: document.getElementById("view-add"),
 };
@@ -146,11 +153,8 @@ function switchView(name) {
 
   if (name === "customers") loadCustomerList();
   if (name === "messages") initMessages();
-  if (name === "workday") {
-    initWorkdayExportDates(fmtDate);
-    if (admin.isSuper) ensureMsgLogTeamOptions();
-    initWorkday();
-  }
+  if (name === "workday") initWorkday();
+  if (name === "worklog") initWorkLog();
   if (name === "add") resetForm();
   if (name === "route") {
     loadRouteStartForm().then(() => ensureRouteMap());

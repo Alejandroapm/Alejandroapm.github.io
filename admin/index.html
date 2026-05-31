@@ -68,6 +68,8 @@
 
           <button type="button" class="admin-nav__btn admin-nav__btn--accent" data-view="workday" data-i18n="navWorkday">WorkDay</button>
 
+          <button type="button" class="admin-nav__btn" data-view="worklog" data-i18n="navWorkLog">Work Log</button>
+
           <button type="button" class="admin-nav__btn" data-view="route" data-i18n="navRoute">Route planner</button>
 
           <button type="button" class="admin-nav__btn" data-view="map" data-i18n="navMap">Customer map</button>
@@ -647,25 +649,67 @@
 
             </div>
 
-            <div class="workday-export" id="workdayExportWrap">
-              <label id="exportUserWrap" class="workday-export__field" hidden>
-                <span class="muted" data-i18n="exportForMember">Export for</span>
-                <select id="exportUserSelect"></select>
-              </label>
-              <label class="workday-export__field">
-                <span class="muted" data-i18n="exportFromDate">From</span>
-                <input type="date" id="exportFromDate" />
-              </label>
-              <label class="workday-export__field">
-                <span class="muted" data-i18n="exportToDate">To</span>
-                <input type="date" id="exportToDate" />
-              </label>
-              <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+          </div>
+
+          <div id="workdayBody"></div>
+
+        </section>
+
+        <!-- Work Log export -->
+
+        <section class="admin-view" id="view-worklog" hidden>
+
+          <div class="admin-toolbar">
+
+            <div>
+
+              <h1 data-i18n="workLogTitle">Work Log</h1>
+
+              <p class="muted section__lead" data-i18n="workLogLead">Download mileage and service records as a CSV for your taxes or records.</p>
+
             </div>
 
           </div>
 
-          <div id="workdayBody"></div>
+          <div class="card worklog-export">
+
+            <div class="form-row" id="exportUserWrap" hidden>
+
+              <label for="exportUserSelect" data-i18n="exportForMember">Export for</label>
+
+              <select id="exportUserSelect"></select>
+
+            </div>
+
+            <div class="grid grid--2">
+
+              <div class="form-row">
+
+                <label for="exportFromDate" data-i18n="exportFromDate">From</label>
+
+                <input type="date" id="exportFromDate" />
+
+              </div>
+
+              <div class="form-row">
+
+                <label for="exportToDate" data-i18n="exportToDate">To</label>
+
+                <input type="date" id="exportToDate" />
+
+              </div>
+
+            </div>
+
+            <p class="fineprint muted" data-i18n="workLogRangeHint">Leave From empty to export only the To date. Set both for a range.</p>
+
+            <div class="admin-form__actions">
+
+              <button type="button" class="btn" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+
+            </div>
+
+          </div>
 
         </section>
 

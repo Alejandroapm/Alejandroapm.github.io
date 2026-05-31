@@ -628,18 +628,15 @@
 }
 .msg-log__tab-count{ opacity:.65; margin-left:4px; }
 .msg-log__hint{ margin:0 0 12px; font-size:13px; }
-.workday-export{
-  display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 16px;
+.worklog-export{
+  max-width:520px;
 }
-.workday-export--app{ margin-top:12px; }
-.workday-export__field{
-  display:flex; flex-direction:column; gap:4px; font-size:13px;
-}
-.workday-export__field input[type="date"],
-.workday-export__field select{
-  min-width:148px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+.worklog-export .form-row input[type="date"],
+.worklog-export .form-row select{
+  width:100%; max-width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
   background:var(--surface); color:inherit; font:inherit;
 }
+.worklog-export .admin-form__actions{ margin-top:8px; }
 .btn--danger{ color:#e11d48; border-color:color-mix(in srgb, #e11d48 40%, var(--border)); }
 .btn--danger:hover{ border-color:#e11d48; background:color-mix(in srgb, #e11d48 8%, var(--surface)); }
 .msg-log__item{

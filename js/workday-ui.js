@@ -628,11 +628,9 @@ export function createWorkdayUI(deps) {
           <div><span class="workday-summary__num">${workday.totalMiles ?? 0}</span><span class="muted">${t("miles")}</span></div>
           <div><span class="workday-summary__num">${hrs}</span><span class="muted">${t("onTheRoad")}</span></div>
         </div>
-        <button type="button" class="btn btn--block" id="exportLogBtn2">${t("downloadCsv")}</button>
         <button type="button" class="btn btn--ghost btn--block" id="newDayBtn">${t("startNewDay")}</button>
       </div>
     `;
-    document.getElementById("exportLogBtn2").addEventListener("click", downloadWorkLog);
     document.getElementById("newDayBtn").addEventListener("click", () => { workday = null; renderWorkday(); });
   }
 

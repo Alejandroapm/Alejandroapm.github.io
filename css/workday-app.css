@@ -13,9 +13,13 @@
   padding-top: env(safe-area-inset-top);
 }
 
+.workday-app-page .workday-app__main {
+  flex: 1;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
 .workday-app-page .admin-main {
   flex: 1;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 
 .workday-app-page .admin-login-card {
@@ -23,16 +27,24 @@
   margin: 24px auto;
 }
 
-.workday-app-page .workday-app__toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+.workday-app-page .workday-app__panels {
+  min-width: 0;
+}
+
+.workday-app-page .workday-app__panel h1 {
+  margin: 0 0 4px;
+}
+
+.workday-app-page .workday-app__panel .section__lead {
   margin-bottom: 16px;
 }
 
-.workday-app-page .workday-app__toolbar h1 {
-  margin: 0 0 4px;
+.workday-app-page .worklog-export {
+  max-width: 420px;
+}
+
+.workday-app-page .worklog-export input[type="date"] {
+  width: 100%;
 }
 
 .workday-app-page .admin-topbar__inner {
@@ -63,6 +75,38 @@
   overflow-x: hidden;
 }
 
+.workday-app__tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--line, #e2e8f0);
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.06);
+}
+
+.workday-app__tab {
+  padding: 12px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted, #64748b);
+  cursor: pointer;
+}
+
+.workday-app__tab.is-active {
+  color: var(--accent, #0b5fff);
+  background: color-mix(in srgb, var(--accent, #0b5fff) 10%, transparent);
+}
+
 @media (max-width: 640px) {
   .workday-app-page .admin-topbar__inner {
     flex-wrap: wrap;
@@ -84,11 +128,8 @@
   margin-bottom: 10px;
 }
 
-.install-qr {
-  text-align: center;
-  margin: 20px 0;
-}
-
-.install-open-btn {
-  margin-top: 12px;
+.install-share-icon {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 1.1em;
 }

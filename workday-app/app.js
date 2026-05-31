@@ -14,6 +14,10 @@ const appScreen = document.getElementById("appScreen");
 const loginForm = document.getElementById("loginForm");
 const loginStatus = document.getElementById("loginStatus");
 const loginSubmitBtn = loginForm?.querySelector('button[type="submit"]');
+const panelWorkday = document.getElementById("appPanelWorkday");
+const panelWorklog = document.getElementById("appPanelWorklog");
+
+let appView = "workday";
 
 function initWorkdayAppLang() {
   const sync = (lang) => {
@@ -25,7 +29,7 @@ function initWorkdayAppLang() {
   document.querySelectorAll("#langES, #langESApp").forEach((b) => b?.addEventListener("click", () => setAdminLang("es")));
   onLangChange((lang) => {
     sync(lang);
-    if (!appScreen.hidden) workdayUI.render();
+    if (!appScreen.hidden && appView === "workday") workdayUI.render();
   });
   applyStaticI18n();
   sync(getAdminLang());
@@ -66,6 +70,23 @@ const workdayUI = createWorkdayUI({
 
 initWorkdayAppLang();
 
+function switchAppView(name) {
+  appView = name;
+  document.querySelectorAll(".workday-app__tab").forEach((btn) => {
+    const active = btn.dataset.appView === name;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-current", active ? "page" : "false");
+  });
+  if (panelWorkday) panelWorkday.hidden = name !== "workday";
+  if (panelWorklog) panelWorklog.hidden = name !== "worklog";
+  if (name === "workday") workdayUI.render();
+  if (name === "worklog") initWorkdayExportDates(fmtDate);
+}
+
+document.querySelectorAll(".workday-app__tab").forEach((btn) => {
+  btn.addEventListener("click", () => switchAppView(btn.dataset.appView));
+});
+
 const savedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY);
 if (savedEmail && loginForm?.email) loginForm.email.value = savedEmail;
 if (localStorage.getItem(REMEMBER_DEVICE_KEY) === "1") {
@@ -82,7 +103,7 @@ function showApp(admin) {
   appScreen.hidden = false;
   profile.businessName = admin.businessName || "MSG Pool Services";
   document.getElementById("appUserEmail").textContent = admin.email;
-  initWorkdayExportDates(fmtDate);
+  switchAppView("workday");
   workdayUI.init();
 }
 

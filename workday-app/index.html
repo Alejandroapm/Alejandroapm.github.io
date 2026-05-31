@@ -76,28 +76,39 @@
       </div>
     </header>
 
-    <main class="admin-main">
-      <div class="container">
-        <div class="workday-app__toolbar">
-          <div>
-            <h1 data-i18n="wdTitle">WorkDay</h1>
-            <p class="muted section__lead" data-i18n="wdLead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
-          </div>
-          <div class="workday-export workday-export--app">
-            <label class="workday-export__field">
-              <span class="muted" data-i18n="exportFromDate">From</span>
+    <main class="admin-main workday-app__main">
+      <div class="container workday-app__panels">
+
+        <section class="workday-app__panel" id="appPanelWorkday">
+          <h1 data-i18n="wdTitle">WorkDay</h1>
+          <p class="muted section__lead" data-i18n="wdLead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
+          <div id="workdayBody"></div>
+        </section>
+
+        <section class="workday-app__panel" id="appPanelWorklog" hidden>
+          <h1 data-i18n="workLogTitle">Work Log</h1>
+          <p class="muted section__lead" data-i18n="workLogLead">Download mileage and service records as a CSV for your taxes or records.</p>
+          <div class="card worklog-export">
+            <div class="form-row">
+              <label for="exportFromDate" data-i18n="exportFromDate">From</label>
               <input type="date" id="exportFromDate" />
-            </label>
-            <label class="workday-export__field">
-              <span class="muted" data-i18n="exportToDate">To</span>
+            </div>
+            <div class="form-row">
+              <label for="exportToDate" data-i18n="exportToDate">To</label>
               <input type="date" id="exportToDate" />
-            </label>
-            <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+            </div>
+            <p class="fineprint muted" data-i18n="workLogRangeHint">Leave From empty to export only the To date. Set both for a range.</p>
+            <button type="button" class="btn btn--block" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
           </div>
-        </div>
-        <div id="workdayBody"></div>
+        </section>
+
       </div>
     </main>
+
+    <nav class="workday-app__tabs" aria-label="App sections">
+      <button type="button" class="workday-app__tab is-active" data-app-view="workday" data-i18n="navWorkday">WorkDay</button>
+      <button type="button" class="workday-app__tab" data-app-view="worklog" data-i18n="navWorkLog">Work Log</button>
+    </nav>
   </div>
 
   <dialog class="sheet" id="navModal">
