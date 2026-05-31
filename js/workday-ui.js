@@ -621,21 +621,21 @@ export function createWorkdayUI(deps) {
 
   async function downloadWorkLog() {
     try {
-      const url = getExportUrl?.() || "/api/admin/workday/export.csv";
-      const res = await authFetch(url);
+      const exportPath = getExportUrl?.() || "/api/admin/workday/export.csv";
+      const res = await authFetch(exportPath);
       if (!res.ok) throw new Error("Could not download work log.");
       const disp = res.headers.get("Content-Disposition") || "";
       const match = disp.match(/filename="([^"]+)"/);
       const filename = match?.[1] || `workday-log-${new Date().toISOString().slice(0, 10)}.csv`;
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = blobUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       alert(err.message);
     }
