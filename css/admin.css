@@ -566,6 +566,19 @@
   background:rgba(11,95,255,.05);
   padding:12px 14px;
 }
+.msg-score{
+  display:inline-flex;
+  align-items:center;
+  font-weight:900;
+  font-size:13px;
+  padding:8px 14px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  cursor:default;
+}
+.msg-score--high{ background:rgba(16,185,129,.12); color:#047857; border-color:rgba(16,185,129,.4); }
+.msg-score--mid{ background:rgba(245,158,11,.14); color:#b45309; border-color:rgba(245,158,11,.45); }
+.msg-score--low{ background:rgba(225,29,72,.10); color:#be123c; border-color:rgba(225,29,72,.4); }
 .msg-preview > label{ display:block; font-weight:900; color:var(--muted); font-size:12px; margin-bottom:6px; }
 .msg-preview__text{ margin:0; white-space:pre-wrap; }
 .msg-recipients{ margin-top:18px; }

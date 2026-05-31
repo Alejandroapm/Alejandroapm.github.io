@@ -52,14 +52,42 @@ const LANG_NAMES = { en: "English", es: "Spanish" };
 function buildRefinePrompt(targetName) {
   return (
     `You are a professional bilingual assistant for a residential pool and hot tub cleaning business. ` +
-    `The business owner sends you a short note, usually typed quickly in informal Spanish that may contain ` +
-    `spelling mistakes, missing accents, slang, or grammar errors. ` +
-    `Your job: understand what the owner actually means, then rewrite it as a single polished message to the customer, written in ${targetName}. ` +
-    `Fix all spelling and grammar, correct obvious typos (for example "hecho" meaning "echo"), and make the tone warm, courteous, and professional. ` +
-    `Keep every concrete detail the owner included (timing like "tomorrow" or "next week", reasons, the service such as adding double chemicals). ` +
-    `Do not invent details that were not implied, do not add greetings or signatures unless present, and keep it concise like a friendly customer text message. ` +
-    `Respond with ONLY the final ${targetName} message text — no quotes, no labels, no explanations, no alternatives.`
+    `The owner sends a short note, usually written quickly in informal Spanish that may contain spelling mistakes, ` +
+    `missing accents, slang, or grammar errors.\n\n` +
+    `Do the following:\n` +
+    `1. Work out the exact, literal meaning of the note.\n` +
+    `2. Translate it FAITHFULLY into ${targetName}, preserving every detail and the original intent. ` +
+    `Do NOT add apologies, promises, greetings, or any idea that is not in the original, and do NOT drop information. ` +
+    `Translate what was actually said, not a nicer version of it.\n` +
+    `3. Fix only spelling, grammar, and obvious typos (for example "hecho" used for "echo", "vacuum" meaning the pool vacuum). ` +
+    `Keep the wording simple, clear, courteous and professional — plain everyday language, no heavy jargon, no embellishment.\n` +
+    `4. Keep the length and tone close to the original.\n` +
+    `5. Rate the fidelity from 0 to 100: how completely and accurately your message preserves the original meaning ` +
+    `(100 = nothing added, removed, or guessed; lower it whenever you had to guess intent or could not convey something exactly).\n\n` +
+    `Respond with ONLY a single-line JSON object, no markdown and no extra text, exactly like:\n` +
+    `{"message":"<final message in ${targetName}>","fidelity":<integer 0-100>}`
   );
+}
+
+function parseRefineOutput(raw) {
+  if (!raw) return null;
+  let jsonText = String(raw).trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const start = jsonText.indexOf("{");
+  const end = jsonText.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) jsonText = jsonText.slice(start, end + 1);
+
+  try {
+    const obj = JSON.parse(jsonText);
+    const message = typeof obj.message === "string" ? obj.message.trim() : "";
+    let score = Number(obj.fidelity);
+    score = Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : null;
+    if (message) return { message, score };
+  } catch {
+    // not valid JSON — fall back to treating the whole response as the message
+  }
+
+  const message = String(raw).replace(/^["'\s]+|["'\s]+$/g, "").trim();
+  return message ? { message, score: null } : null;
 }
 
 /** Clean up and translate an owner's note using a Workers AI LLM; MyMemory is a last-resort fallback. */
@@ -73,18 +101,17 @@ async function refineMessage(env, text, target) {
           { role: "system", content: buildRefinePrompt(targetName) },
           { role: "user", content: text },
         ],
-        max_tokens: 512,
-        temperature: 0.3,
+        max_tokens: 600,
+        temperature: 0.2,
       });
-      let out = (res?.response || "").trim();
-      out = out.replace(/^["'\s]+|["'\s]+$/g, "").trim();
-      if (out) return out;
+      const parsed = parseRefineOutput(res?.response || "");
+      if (parsed?.message) return parsed;
     } catch {
       // fall through to the fallback below
     }
   }
 
-  if (target === "es") return text;
+  if (target === "es") return { message: text, score: null };
 
   try {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=es|en`;
@@ -92,7 +119,7 @@ async function refineMessage(env, text, target) {
     if (r.ok) {
       const data = await r.json();
       const out = data?.responseData?.translatedText;
-      if (out && out.trim()) return out.trim();
+      if (out && out.trim()) return { message: out.trim(), score: null };
     }
   } catch {
     // ignore and report unavailable below
@@ -428,11 +455,11 @@ app.post("/api/admin/translate", async (c) =>
     const target = String(body.target || "en").toLowerCase() === "es" ? "es" : "en";
     if (!text) return json({ error: "Enter a message to translate." }, 400);
 
-    const translated = await refineMessage(ctx.env, text, target);
-    if (translated == null) {
+    const result = await refineMessage(ctx.env, text, target);
+    if (result == null) {
       return json({ error: "Translation service is unavailable right now. Try again in a moment." }, 502);
     }
-    return json({ translated, target });
+    return json({ translated: result.message, score: result.score, target });
   })
 );
 

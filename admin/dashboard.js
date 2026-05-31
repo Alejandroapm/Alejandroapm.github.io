@@ -586,6 +586,19 @@ async function initMessages() {
   }
 }
 
+function updateScore(score) {
+  const el = document.getElementById("msgScore");
+  if (!el) return;
+  if (score == null) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.textContent = `Accuracy ${score}%`;
+  el.classList.remove("msg-score--high", "msg-score--mid", "msg-score--low");
+  el.classList.add(score >= 90 ? "msg-score--high" : score >= 75 ? "msg-score--mid" : "msg-score--low");
+}
+
 function renderMsgRecipient(c, message) {
   const phone = (c.phone || "").replace(/[^\d+]/g, "");
   const smsHref = phone ? `sms:${phone}?&body=${encodeURIComponent(message)}` : null;
@@ -666,6 +679,7 @@ async function composeMessage() {
   recipientsEl.innerHTML = "";
   preview.hidden = true;
   setStatus(statusEl, "");
+  updateScore(null);
 
   if (!text) {
     setStatus(statusEl, "Write a message first.", "error");
@@ -699,11 +713,12 @@ async function composeMessage() {
   let outgoing = text;
   setStatus(statusEl, "Polishing message…");
   try {
-    const { translated } = await api("/api/admin/translate", {
+    const { translated, score } = await api("/api/admin/translate", {
       method: "POST",
       body: JSON.stringify({ text, source: "es", target: msgLang }),
     });
     outgoing = translated || text;
+    updateScore(score);
   } catch (err) {
     setStatus(statusEl, err.message, "error");
     return;
