@@ -1,7 +1,7 @@
 # Cloudflare Pages + Workers (free tier) — serves site + admin API
 # Docs: connect this GitHub repo in Cloudflare Dashboard → Workers & Pages → Create → Pages
 
-name = "msg-pool-services"
+name = 'proud-sun-f507'
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "."
