@@ -581,11 +581,26 @@ const MSG_LOG_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 app.get("/api/admin/messages", async (c) =>
   withAdmin(c, async (ctx, auth) => {
     const cutoff = Date.now() - MSG_LOG_WINDOW_MS;
-    const scope = auth.isSuper ? "" : " AND owner_id = ?";
-    const binds = auth.isSuper ? [cutoff] : [cutoff, auth.userId];
-    const { results } = await ctx.env.DB.prepare(
-      `SELECT * FROM message_logs WHERE created_at >= ?${scope} ORDER BY created_at DESC LIMIT 500`
-    ).bind(...binds).all();
+    const ownerIdRaw = ctx.req.query("ownerId");
+    let scope = "";
+    const scopeBinds = [];
+    if (!auth.isSuper) {
+      scope = " AND m.owner_id = ?";
+      scopeBinds.push(auth.userId);
+    } else if (ownerIdRaw != null && ownerIdRaw !== "") {
+      const ownerId = Number(ownerIdRaw);
+      if (!ownerId) return json({ error: "Invalid owner id." }, 400);
+      scope = " AND m.owner_id = ?";
+      scopeBinds.push(ownerId);
+    }
+    const { results } = await ctx.env.DB.prepare(`
+      SELECT m.*, a.name AS owner_name, a.email AS owner_email
+      FROM message_logs m
+      LEFT JOIN admins a ON a.id = m.owner_id
+      WHERE m.created_at >= ?${scope}
+      ORDER BY m.created_at DESC
+      LIMIT 500
+    `).bind(cutoff, ...scopeBinds).all();
     return json({ messages: results || [] });
   })
 );
@@ -621,6 +636,22 @@ app.post("/api/admin/messages/log", async (c) =>
     await ctx.env.DB.prepare(`DELETE FROM message_logs WHERE created_at < ?${retentionScope}`)
       .bind(...retentionBinds).run();
 
+    return json({ ok: true });
+  })
+);
+
+app.delete("/api/admin/messages/clear", async (c) =>
+  withAdmin(c, async (ctx, auth) => {
+    const denied = requireSuper(auth);
+    if (denied) return json({ error: denied.error }, denied.status);
+    const ownerIdRaw = ctx.req.query("ownerId");
+    if (ownerIdRaw != null && ownerIdRaw !== "") {
+      const ownerId = Number(ownerIdRaw);
+      if (!ownerId) return json({ error: "Invalid owner id." }, 400);
+      await ctx.env.DB.prepare("DELETE FROM message_logs WHERE owner_id = ?").bind(ownerId).run();
+    } else {
+      await ctx.env.DB.prepare("DELETE FROM message_logs").run();
+    }
     return json({ ok: true });
   })
 );
@@ -785,13 +816,24 @@ app.post("/api/admin/workday/stop/:stopId/notes", async (c) =>
 
 app.get("/api/admin/workday/export.csv", async (c) =>
   withAdmin(c, async (ctx, auth) => {
-    const { csv, filename } = await exportWorkdaysCsv(ctx.env.DB, auth);
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
+    const userIdRaw = ctx.req.query("userId");
+    let targetUserId = null;
+    if (userIdRaw != null && userIdRaw !== "") {
+      if (!auth.isSuper) return json({ error: "Super user access required." }, 403);
+      targetUserId = Number(userIdRaw);
+      if (!targetUserId) return json({ error: "Invalid user id." }, 400);
+    }
+    try {
+      const { csv, filename } = await exportWorkdaysCsv(ctx.env.DB, auth, targetUserId);
+      return new Response(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
+    } catch (err) {
+      return json({ error: err.message || "Could not export work log." }, err.status || 400);
+    }
   })
 );
 

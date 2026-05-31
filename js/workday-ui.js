@@ -16,6 +16,7 @@ export function createWorkdayUI(deps) {
     adminLocale,
     poolsLabel,
     getBusinessName = () => "MSG Pool Services",
+    getExportUrl,
     els,
   } = deps;
 
@@ -620,7 +621,8 @@ export function createWorkdayUI(deps) {
 
   async function downloadWorkLog() {
     try {
-      const res = await authFetch("/api/admin/workday/export.csv");
+      const url = getExportUrl?.() || "/api/admin/workday/export.csv";
+      const res = await authFetch(url);
       if (!res.ok) throw new Error("Could not download work log.");
       const disp = res.headers.get("Content-Disposition") || "";
       const match = disp.match(/filename="([^"]+)"/);

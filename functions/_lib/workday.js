@@ -303,15 +303,31 @@ function minutesBetween(start, end) {
  * Tax-oriented work log for the signed-in team member only (never combined across users).
  * Returns UTF-8 CSV with a header block, detail rows, and summary totals.
  */
-export async function exportWorkdaysCsv(db, auth) {
-  const adminRow = await findAdminById(db, auth.userId);
-  const memberName = adminRow?.name || auth.name || "";
+export async function exportWorkdaysCsv(db, auth, targetUserId = null) {
+  let exportUserId = auth.userId;
+  if (targetUserId != null) {
+    if (!auth.isSuper) {
+      const err = new Error("Super user access required.");
+      err.status = 403;
+      throw err;
+    }
+    exportUserId = targetUserId;
+    const target = await findAdminById(db, exportUserId);
+    if (!target) {
+      const err = new Error("Team member not found.");
+      err.status = 404;
+      throw err;
+    }
+  }
+
+  const adminRow = await findAdminById(db, exportUserId);
+  const memberName = adminRow?.name || "";
   const businessName = adminRow?.business_name || "";
-  const memberEmail = adminRow?.email || auth.email || "";
+  const memberEmail = adminRow?.email || "";
 
   const { results: days } = await db
     .prepare(`SELECT * FROM work_days WHERE owner_id = ? ORDER BY started_at ASC, id ASC`)
-    .bind(auth.userId)
+    .bind(exportUserId)
     .all();
 
   const generatedAt = fmtET(Date.now());

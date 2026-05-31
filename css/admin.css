@@ -604,6 +604,42 @@
 }
 .msg-recipient .btn{ flex:none; }
 .msg-log{ margin-top:28px; }
+.msg-log__actions{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 16px;
+}
+.msg-log__filter{
+  display:flex; flex-direction:column; gap:4px; font-size:13px;
+}
+.msg-log__filter input[type="date"],
+.msg-log__filter select{
+  min-width:160px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); color:inherit; font:inherit;
+}
+.msg-log__tabs{
+  display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 16px;
+}
+.msg-log__tab{
+  padding:6px 12px; border:1px solid var(--border); border-radius:999px;
+  background:var(--surface); font:inherit; font-size:13px; cursor:pointer;
+}
+.msg-log__tab.is-active{
+  border-color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, var(--surface));
+  font-weight:600;
+}
+.msg-log__tab-count{ opacity:.65; margin-left:4px; }
+.msg-log__hint{ margin:0 0 12px; font-size:13px; }
+.workday-export{
+  display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 16px;
+}
+.workday-export__member{
+  display:flex; flex-direction:column; gap:4px; font-size:13px;
+}
+.workday-export__member select{
+  min-width:200px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); color:inherit; font:inherit;
+}
+.btn--danger{ color:#e11d48; border-color:color-mix(in srgb, #e11d48 40%, var(--border)); }
+.btn--danger:hover{ border-color:#e11d48; background:color-mix(in srgb, #e11d48 8%, var(--surface)); }
 .msg-log__item{
   border:1px solid var(--line);
   border-radius:12px;

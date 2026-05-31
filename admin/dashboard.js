@@ -10,6 +10,14 @@ if (!admin) throw new Error("redirect");
 document.getElementById("adminEmail").textContent = admin.email;
 if (admin.isSuper) {
   document.querySelector('[data-view="team"]')?.removeAttribute("hidden");
+  document.getElementById("msgLogOwnerWrap")?.removeAttribute("hidden");
+  document.getElementById("msgLogClearAll")?.removeAttribute("hidden");
+  document.getElementById("exportUserWrap")?.removeAttribute("hidden");
+  const superLead = document.querySelector("#view-messages .msg-log .section__lead");
+  if (superLead) {
+    superLead.dataset.i18n = "msgLogLeadSuper";
+    superLead.textContent = t("msgLogLeadSuper");
+  }
 }
 
 initLangToggle();
@@ -30,6 +38,11 @@ const workdayUI = createWorkdayUI({
   adminLocale,
   poolsLabel,
   getBusinessName: () => admin.businessName || "MSG Pool Services",
+  getExportUrl: () => {
+    const sel = document.getElementById("exportUserSelect");
+    const uid = admin.isSuper && sel?.value ? sel.value : "";
+    return uid ? `/api/admin/workday/export.csv?userId=${encodeURIComponent(uid)}` : "/api/admin/workday/export.csv";
+  },
   els: {
     body: document.getElementById("workdayBody"),
     jobModal: document.getElementById("jobModal"),
@@ -124,7 +137,10 @@ function switchView(name) {
 
   if (name === "customers") loadCustomerList();
   if (name === "messages") initMessages();
-  if (name === "workday") initWorkday();
+  if (name === "workday") {
+    if (admin.isSuper) ensureMsgLogTeamOptions();
+    initWorkday();
+  }
   if (name === "add") resetForm();
   if (name === "route") {
     loadRouteStartForm().then(() => ensureRouteMap());
@@ -892,6 +908,44 @@ teamEditForm?.addEventListener("submit", async (e) => {
 let msgLang = "en";
 let msgCustomers = [];
 let msgCustomersLoaded = false;
+let msgLogActiveDate = null;
+const MSG_LOG_PER_DAY = 10;
+
+function messageLogDate(ms) {
+  return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+function formatLogTabDate(dateStr) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  return d.toLocaleDateString(adminLocale(), { weekday: "short", month: "short", day: "numeric" });
+}
+
+async function ensureMsgLogTeamOptions() {
+  if (!admin.isSuper) return;
+  try {
+    if (!teamUsersCache.length) {
+      const { users } = await api("/api/admin/users");
+      teamUsersCache = users || [];
+    }
+    const ownerSel = document.getElementById("msgLogOwnerFilter");
+    const exportSel = document.getElementById("exportUserSelect");
+    const keepOwner = ownerSel?.value || "";
+    const keepExport = exportSel?.value || "";
+    const memberOpts = teamUsersCache
+      .map((u) => `<option value="${u.id}">${esc(u.name || u.email)}</option>`)
+      .join("");
+    if (ownerSel) {
+      ownerSel.innerHTML = `<option value="">${t("msgLogOwnerAll")}</option>${memberOpts}`;
+      ownerSel.value = keepOwner;
+    }
+    if (exportSel) {
+      exportSel.innerHTML = memberOpts;
+      exportSel.value = keepExport || String(admin.userId);
+    }
+  } catch {
+    /* filters stay empty until refresh */
+  }
+}
 
 async function initMessages() {
   const dateInput = document.getElementById("msgDate");
@@ -899,6 +953,7 @@ async function initMessages() {
     const now = new Date();
     dateInput.value = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
   }
+  await ensureMsgLogTeamOptions();
   loadMessageLog();
   try {
     if (!msgCustomersLoaded) {
@@ -960,11 +1015,15 @@ async function logMessage(entry) {
 function renderLogItem(m) {
   const when = new Date(m.created_at).toLocaleString(adminLocale(), { dateStyle: "medium", timeStyle: "short" });
   const lang = m.language === "es" ? t("spanish") : t("english");
+  const ownerTag = admin.isSuper && m.owner_name
+    ? `<span class="tag tag--owner">${esc(m.owner_name || m.owner_email || t("ownerUnknown"))}</span>`
+    : "";
   return `
     <article class="msg-log__item">
       <div class="msg-log__meta">
         <strong>${esc(m.customer_name || "(no name)")}</strong>
         ${m.phone ? `<span class="muted">${esc(m.phone)}</span>` : ""}
+        ${ownerTag}
         <span class="tag">${lang}</span>
         <span class="muted msg-log__time">${esc(when)}</span>
         <button type="button" class="msg-log__del" data-del-msg="${m.id}" aria-label="Delete this message" title="Delete">✕</button>
@@ -977,14 +1036,87 @@ function renderLogItem(m) {
   `;
 }
 
+function groupMessagesByDate(messages) {
+  const byDate = new Map();
+  for (const m of messages) {
+    const key = messageLogDate(m.created_at);
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(m);
+  }
+  return byDate;
+}
+
+function renderMessageLogTabs(dates, activeDate) {
+  const tabsEl = document.getElementById("msgLogTabs");
+  if (!tabsEl) return;
+  if (!dates.length) {
+    tabsEl.hidden = true;
+    tabsEl.innerHTML = "";
+    return;
+  }
+  tabsEl.hidden = false;
+  tabsEl.innerHTML = dates
+    .map(({ date, count }) => {
+      const active = date === activeDate ? " is-active" : "";
+      const shown = Math.min(count, MSG_LOG_PER_DAY);
+      const countLabel = count > MSG_LOG_PER_DAY ? `${shown}/${count}` : String(count);
+      return `<button type="button" class="msg-log__tab${active}" role="tab" data-msg-date="${date}" aria-selected="${date === activeDate}">${esc(formatLogTabDate(date))}<span class="msg-log__tab-count">(${countLabel})</span></button>`;
+    })
+    .join("");
+  tabsEl.querySelectorAll("[data-msg-date]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      msgLogActiveDate = btn.dataset.msgDate;
+      const filter = document.getElementById("msgLogDateFilter");
+      if (filter) filter.value = msgLogActiveDate;
+      loadMessageLog();
+    });
+  });
+}
+
 async function loadMessageLog() {
   const list = document.getElementById("msgLogList");
   if (!list) return;
+  const dateFilterEl = document.getElementById("msgLogDateFilter");
+  const ownerFilterEl = document.getElementById("msgLogOwnerFilter");
+  const jumpDate = dateFilterEl?.value || "";
   try {
-    const { messages } = await api("/api/admin/messages");
-    list.innerHTML = messages.length
-      ? messages.map(renderLogItem).join("")
-      : `<p class="muted">${t("noMessages")}</p>`;
+    let url = "/api/admin/messages";
+    if (admin.isSuper && ownerFilterEl?.value) {
+      url += `?ownerId=${encodeURIComponent(ownerFilterEl.value)}`;
+    }
+    const { messages } = await api(url);
+    const byDate = groupMessagesByDate(messages);
+    const dates = [...byDate.entries()]
+      .map(([date, items]) => ({ date, count: items.length }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    if (jumpDate && byDate.has(jumpDate)) {
+      msgLogActiveDate = jumpDate;
+    } else if (!msgLogActiveDate || !byDate.has(msgLogActiveDate)) {
+      msgLogActiveDate = dates[0]?.date || null;
+    }
+
+    renderMessageLogTabs(dates, msgLogActiveDate);
+
+    if (!msgLogActiveDate || !byDate.has(msgLogActiveDate)) {
+      list.innerHTML = `<p class="muted">${t("noMessages")}</p>`;
+      if (dateFilterEl && jumpDate && !byDate.has(jumpDate)) {
+        list.innerHTML = `<p class="muted">${t("noMessages")}</p><p class="muted msg-log__hint">${esc(jumpDate)}</p>`;
+      }
+      return;
+    }
+
+    if (dateFilterEl) dateFilterEl.value = msgLogActiveDate;
+
+    const dayMessages = byDate.get(msgLogActiveDate);
+    const totalOnDay = dayMessages.length;
+    const visible = dayMessages.slice(0, MSG_LOG_PER_DAY);
+    const extra = totalOnDay - visible.length;
+
+    list.innerHTML = `
+      <p class="muted msg-log__hint">${t("msgLogPerDayHint")}${extra > 0 ? ` (${extra} ${t("msgLogMoreOnDay")})` : ""}</p>
+      ${visible.map(renderLogItem).join("")}
+    `;
 
     list.querySelectorAll("[data-del-msg]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -1120,6 +1252,29 @@ document.querySelectorAll('input[name="msgMode"]').forEach((radio) => {
 
 document.getElementById("msgTranslateBtn")?.addEventListener("click", composeMessage);
 document.getElementById("msgLogRefresh")?.addEventListener("click", loadMessageLog);
+document.getElementById("msgLogDateFilter")?.addEventListener("change", () => {
+  msgLogActiveDate = document.getElementById("msgLogDateFilter")?.value || null;
+  loadMessageLog();
+});
+document.getElementById("msgLogOwnerFilter")?.addEventListener("change", () => {
+  msgLogActiveDate = null;
+  loadMessageLog();
+});
+document.getElementById("msgLogClearAll")?.addEventListener("click", async () => {
+  if (!admin.isSuper) return;
+  if (!confirm(t("msgLogClearConfirm"))) return;
+  try {
+    const ownerId = document.getElementById("msgLogOwnerFilter")?.value || "";
+    const url = ownerId
+      ? `/api/admin/messages/clear?ownerId=${encodeURIComponent(ownerId)}`
+      : "/api/admin/messages/clear";
+    await api(url, { method: "DELETE" });
+    msgLogActiveDate = null;
+    loadMessageLog();
+  } catch (err) {
+    setStatus(document.getElementById("msgStatus"), err.message, "error");
+  }
+});
 
 await Promise.all([renderCalendar(), loadStats()]);
 

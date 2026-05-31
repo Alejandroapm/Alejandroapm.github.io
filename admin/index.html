@@ -536,11 +536,24 @@
 
               <h2 data-i18n="msgLog">Message log</h2>
 
-              <button type="button" class="btn btn--ghost btn--small" id="msgLogRefresh" data-i18n="refresh">Refresh</button>
+              <div class="msg-log__actions">
+                <label class="msg-log__filter" id="msgLogOwnerWrap" hidden>
+                  <span class="muted" data-i18n="msgLogOwner">Team member</span>
+                  <select id="msgLogOwnerFilter"><option value="" data-i18n="msgLogOwnerAll">All team members</option></select>
+                </label>
+                <label class="msg-log__filter">
+                  <span class="muted" data-i18n="msgLogDateFilter">Filter by date</span>
+                  <input type="date" id="msgLogDateFilter" />
+                </label>
+                <button type="button" class="btn btn--ghost btn--small" id="msgLogRefresh" data-i18n="refresh">Refresh</button>
+                <button type="button" class="btn btn--ghost btn--small btn--danger" id="msgLogClearAll" hidden data-i18n="msgLogClearAll">Clear all</button>
+              </div>
 
             </div>
 
             <p class="muted section__lead" data-i18n="msgLogLead">Every text you start is recorded here and kept for the last 30 days.</p>
+
+            <div class="msg-log__tabs" id="msgLogTabs" role="tablist" hidden></div>
 
             <div id="msgLogList"></div>
 
@@ -632,7 +645,13 @@
 
             </div>
 
-            <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+            <div class="workday-export" id="workdayExportWrap">
+              <label id="exportUserWrap" class="workday-export__member" hidden>
+                <span class="muted" data-i18n="exportForMember">Export for</span>
+                <select id="exportUserSelect"></select>
+              </label>
+              <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+            </div>
 
           </div>
 
