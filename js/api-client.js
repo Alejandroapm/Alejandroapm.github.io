@@ -37,6 +37,13 @@ export function adminPageUrl(path = "/admin/login.html") {
   return `${getServerOrigin()}${normalized}`;
 }
 
+/** Full URL for the WorkDay iPhone app (PWA). */
+export function workdayAppUrl(path = "/workday-app/") {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (window.location.origin === getServerOrigin()) return normalized;
+  return `${getServerOrigin()}${normalized}`;
+}
+
 /** True when viewing static files locally (Live Server) instead of the Node app. */
 export function isStaticDevServer() {
   if (!isLocalDevHost(window.location.hostname)) return false;

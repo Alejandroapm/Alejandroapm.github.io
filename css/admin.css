@@ -122,6 +122,15 @@
   border-color:rgba(11,95,255,.45);
   color:var(--brand);
 }
+.admin-page .btn--accent{
+  background:rgba(11,95,255,.1);
+  color:var(--brand);
+  border:1px solid rgba(11,95,255,.35);
+}
+.admin-page .btn--accent:hover{
+  background:var(--brand);
+  color:#fff;
+}
 #calendarTitle{
   font-weight:900;
   min-width:180px;

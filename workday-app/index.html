@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b5fff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="WorkDay" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="../assets/logo.png" />
+  <title>WorkDay | MSG Pool Services</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="../css/workday-app.css" />
+</head>
+<body class="admin-page workday-app-page">
+
+  <!-- Login screen -->
+  <div id="loginScreen">
+    <header class="admin-topbar">
+      <div class="container admin-topbar__inner">
+        <strong>WorkDay</strong>
+        <div class="lang-toggle" role="group" aria-label="Language toggle">
+          <button class="lang-toggle__btn is-active" id="langEN" type="button">EN</button>
+          <button class="lang-toggle__btn" id="langES" type="button">ES</button>
+        </div>
+      </div>
+    </header>
+    <main class="admin-main">
+      <div class="container">
+        <div class="card admin-login-card">
+          <h1 data-i18n="loginTitle">Admin log in</h1>
+          <p class="muted" data-i18n="wdAppLoginLead">Sign in with the same admin email and password you use on the website.</p>
+          <form id="loginForm">
+            <div class="form-row">
+              <label for="email" data-i18n="loginEmail">Email</label>
+              <input id="email" name="email" type="email" autocomplete="username" required />
+            </div>
+            <div class="form-row">
+              <label for="password" data-i18n="loginPassword">Password</label>
+              <input id="password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+            <div class="form-row admin-remember">
+              <label><input type="checkbox" id="rememberDevice" name="rememberDevice" /> <span data-i18n="rememberDevice">Remember this device for 30 days</span></label>
+              <p class="fineprint" data-i18n="rememberHint">Only your email is saved on this computer - never your password.</p>
+            </div>
+            <button class="btn btn--full" type="submit" data-i18n="loginBtn">Log in</button>
+            <p class="fineprint form-status" id="loginStatus" aria-live="polite"></p>
+          </form>
+          <p class="admin-back"><a href="install.html" data-i18n="installHelp">How to install on iPhone</a></p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- WorkDay app screen -->
+  <div id="appScreen" hidden>
+    <header class="admin-topbar">
+      <div class="container admin-topbar__inner">
+        <div>
+          <strong>WorkDay</strong>
+          <span class="muted" id="appUserEmail"></span>
+        </div>
+        <div class="admin-topbar__actions">
+          <div class="lang-toggle" role="group" aria-label="Language toggle">
+            <button class="lang-toggle__btn is-active" id="langENApp" type="button">EN</button>
+            <button class="lang-toggle__btn" id="langESApp" type="button">ES</button>
+          </div>
+          <button type="button" class="btn btn--ghost btn--small" id="logoutBtn" data-i18n="logout">Log out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <div class="container">
+        <div class="workday-app__toolbar">
+          <div>
+            <h1 data-i18n="wdTitle">WorkDay</h1>
+            <p class="muted section__lead" data-i18n="wdLead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
+          </div>
+          <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+        </div>
+        <div id="workdayBody"></div>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="sheet" id="navModal">
+    <div class="sheet__header">
+      <h2 id="navModalTitle" data-i18n="navigateTo">Navigate to</h2>
+      <button type="button" class="day-modal__close" id="closeNavModal" aria-label="Close">×</button>
+    </div>
+    <div class="sheet__body" id="navModalBody"></div>
+  </dialog>
+
+  <dialog class="job-modal" id="jobModal">
+    <div class="job-modal__header">
+      <h2 id="jobModalTitle" data-i18n="job">Job</h2>
+      <button type="button" class="day-modal__close" id="closeJobModal" aria-label="Close">×</button>
+    </div>
+    <div class="job-modal__body" id="jobModalBody"></div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="WorkDay" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="../assets/logo.png" />
+  <title>Install WorkDay | MSG Pool Services</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="../css/workday-app.css" />
+</head>
+<body class="admin-page workday-app-page">
+  <header class="admin-topbar">
+    <div class="container admin-topbar__inner">
+      <strong>WorkDay</strong>
+      <div class="lang-toggle" role="group" aria-label="Language toggle">
+        <button class="lang-toggle__btn is-active" id="langEN" type="button">EN</button>
+        <button class="lang-toggle__btn" id="langES" type="button">ES</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <div class="container">
+      <div class="card install-card">
+        <h1 data-i18n="installTitle">Install WorkDay on iPhone</h1>
+        <p class="muted" data-i18n="installLead">WorkDay is a web app that installs to your home screen and uses the same admin login and live data as the website.</p>
+
+        <ol class="install-steps">
+          <li data-i18n="installStep1">Open this page on your iPhone using Safari (not Chrome).</li>
+          <li data-i18n="installStep2">Tap the button below to open the WorkDay app.</li>
+          <li data-i18n="installStep3">Tap the Share button <strong>(□↑)</strong> at the bottom of Safari.</li>
+          <li data-i18n="installStep4">Scroll and tap <strong>Add to Home Screen</strong>.</li>
+          <li data-i18n="installStep5">Confirm the name <strong>WorkDay</strong> and tap Add.</li>
+        </ol>
+
+        <p class="fineprint" data-i18n="installSyncNote">Changes on the phone app and the website admin sync automatically because both use the same cloud database.</p>
+
+        <a class="btn btn--block install-open-btn" id="openWorkdayBtn" href="./" data-i18n="openWorkDay">Open WorkDay app</a>
+        <p class="admin-back"><a href="../admin/index.html" data-i18n="backToAdmin">← Back to admin</a></p>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { initLangToggle } from "../js/admin-i18n.js";
+    initLangToggle();
+  </script>
+</body>
+</html>

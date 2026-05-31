@@ -93,6 +93,16 @@ Open **http://localhost:8788/admin/login.html**
 
 - Skip days / extra visits  
 
+- **WorkDay** route execution (admin tab + installable iPhone PWA at `/workday-app/`)
+
+
+
+## WorkDay iPhone app
+
+Field techs can install **WorkDay** on iPhone from the admin topbar (**Install WorkDay**). It uses the same admin login and the same cloud database as the website — changes sync automatically.
+
+Shared WorkDay code lives in `js/workday-ui.js`. See `AGENTS.md` for dual-client development rules.
+
 
 
 ## Public quote form
@@ -114,6 +124,8 @@ mayelin/
 ├── index.html              # Public marketing site
 
 ├── admin/                  # Admin dashboard (HTML + JS)
+├── workday-app/            # WorkDay iPhone PWA (shared js/workday-ui.js)
+├── js/workday-ui.js        # Shared WorkDay logic (admin + app)
 
 ├── functions/              # Cloudflare API (free tier)
 

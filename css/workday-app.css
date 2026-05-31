@@ -1,0 +1,75 @@
+/* Standalone WorkDay iPhone app shell */
+.workday-app-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #f4f7fb);
+}
+
+.workday-app-page .admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding-top: env(safe-area-inset-top);
+}
+
+.workday-app-page .admin-main {
+  flex: 1;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.workday-app-page .admin-login-card {
+  max-width: 420px;
+  margin: 24px auto;
+}
+
+.workday-app-page .workday-app__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.workday-app-page .workday-app__toolbar h1 {
+  margin: 0 0 4px;
+}
+
+.workday-app-page .admin-topbar__inner {
+  align-items: center;
+}
+
+.workday-app-page .admin-topbar__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .workday-app-page .admin-topbar__inner {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.install-card {
+  max-width: 520px;
+  margin: 24px auto;
+}
+
+.install-steps {
+  margin: 16px 0;
+  padding-left: 20px;
+}
+
+.install-steps li {
+  margin-bottom: 10px;
+}
+
+.install-qr {
+  text-align: center;
+  margin: 20px 0;
+}
+
+.install-open-btn {
+  margin-top: 12px;
+}
