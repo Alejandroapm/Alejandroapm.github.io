@@ -1,0 +1,19 @@
+# Files in the project root that must NOT be served as public static assets.
+node_modules
+server
+functions
+worker.js
+wrangler.toml
+package.json
+package-lock.json
+schema.sql
+README.md
+_worker.bundle
+.assetsignore
+.cfignore
+.gitignore
+.dev.vars
+.dev.vars.example
+.env
+.env.example
+.git

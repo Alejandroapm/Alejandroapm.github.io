@@ -1,10 +1,17 @@
-# Cloudflare Pages + Workers (free tier) — serves site + admin API
-# Docs: connect this GitHub repo in Cloudflare Dashboard → Workers & Pages → Create → Pages
+# Cloudflare Worker (free tier) — serves the static site + admin API
+# Deploy: connect this GitHub repo in Cloudflare Dashboard → Workers & Pages → Create → Workers
+# The build runs `npm install`, then the project's deploy command `npx wrangler deploy`.
 
-name = 'proud-sun-f507'
+name = "proud-sun-f507"
+main = "worker.js"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "."
+
+# Static assets (index.html, css/, js/, admin/, ...) are served directly.
+# Anything not matching an asset falls through to worker.js (which handles /api/*).
+[assets]
+directory = "."
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
@@ -12,5 +19,5 @@ database_name = "msg-pool-db"
 database_id = "REPLACE_AFTER_D1_CREATE"
 
 [vars]
-# Set secrets in Cloudflare dashboard (never commit passwords):
-# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET 
+# Set secrets in the Cloudflare dashboard (never commit passwords):
+# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET
