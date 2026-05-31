@@ -93,6 +93,40 @@ document.getElementById("cancelForm")?.addEventListener("click", () => {
   switchView("calendar");
 });
 
+document.getElementById("suggestDayBtn")?.addEventListener("click", suggestBestDay);
+
+async function suggestBestDay() {
+  const resultEl = document.getElementById("suggestDayResult");
+  const street = customerForm.street.value.trim();
+  const city = customerForm.city.value.trim();
+  const zip = customerForm.zip.value.trim();
+  const picked = pickedCoordsPayload(customerForm);
+
+  if (!picked.lat && (!street || !city || !zip)) {
+    setStatus(resultEl, "Enter the address (street, city, ZIP) or pick it from the suggestions first.", "error");
+    return;
+  }
+
+  setStatus(resultEl, "Finding the best day…");
+  try {
+    const data = await api("/api/admin/suggest-day", {
+      method: "POST",
+      body: JSON.stringify({ ...picked, street, city, state: "FL", zip }),
+    });
+    resultEl.classList.remove("form-status--error");
+    resultEl.innerHTML = `
+      <strong>Suggested: ${DAYS[data.suggestedDay]}.</strong> ${esc(data.reason)}
+      <button type="button" class="btn btn--small" id="useSuggestedDay">Use ${DAYS[data.suggestedDay]}</button>
+    `;
+    document.getElementById("useSuggestedDay")?.addEventListener("click", () => {
+      customerForm.serviceDayOfWeek.value = String(data.suggestedDay);
+      setStatus(resultEl, `Service day set to ${DAYS[data.suggestedDay]}.`, "success");
+    });
+  } catch (err) {
+    setStatus(resultEl, err.message, "error");
+  }
+}
+
 document.getElementById("loadRouteBtn")?.addEventListener("click", () => loadRoute(routeDateInput.value));
 document.getElementById("refreshMapBtn")?.addEventListener("click", () => loadCustomerMap());
 

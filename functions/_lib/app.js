@@ -28,6 +28,17 @@ import {
 } from "./auth.js";
 import { suggestAddresses } from "./addressSuggest.js";
 import { buildOptimizedRoute } from "./routeBuilder.js";
+import { geocodeAddress } from "./geocode.js";
+
+function haversineMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const app = new Hono();
 
@@ -445,6 +456,60 @@ app.get("/api/admin/stats", async (c) =>
       count: (byDay || []).find((r) => r.day === i)?.count || 0,
     }));
     return json({ totalActive: totalRow?.n || 0, routeLoad });
+  })
+);
+
+app.post("/api/admin/suggest-day", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json();
+    let lat = body.lat != null && body.lat !== "" ? Number(body.lat) : null;
+    let lng = body.lng != null && body.lng !== "" ? Number(body.lng) : null;
+
+    if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+      const addr = parseAddressBody(body);
+      if (addr.error) return json({ error: "Pick or enter a valid Florida address first." }, 400);
+      const coords = await geocodeAddress(addr);
+      if (!coords) return json({ error: "Could not locate that address on the map yet." }, 400);
+      lat = coords.lat;
+      lng = coords.lng;
+    }
+
+    const { results } = await ctx.env.DB.prepare("SELECT * FROM customers WHERE active = 1").all();
+    const customers = results || [];
+
+    const perDay = DAY_NAMES.map((dayName, day) => {
+      const onDay = customers.filter((c) => c.service_day_of_week === day);
+      const located = onDay.filter((c) => c.lat != null && c.lng != null);
+      let nearest = null;
+      for (const c of located) {
+        const d = haversineMiles(lat, lng, c.lat, c.lng);
+        if (nearest == null || d < nearest) nearest = d;
+      }
+      return {
+        day,
+        dayName,
+        count: onDay.length,
+        located: located.length,
+        nearestMiles: nearest != null ? Number(nearest.toFixed(1)) : null,
+      };
+    });
+
+    const withStops = perDay.filter((d) => d.nearestMiles != null);
+    let suggested;
+    let reason;
+    if (withStops.length) {
+      withStops.sort((a, b) => a.nearestMiles - b.nearestMiles || a.count - b.count);
+      suggested = withStops[0];
+      reason =
+        `The closest pool you already service is about ${suggested.nearestMiles} mi away on ${suggested.dayName}, ` +
+        `so adding this one to ${suggested.dayName} keeps the route tight with little extra driving.`;
+    } else {
+      const byLoad = [...perDay].sort((a, b) => a.count - b.count);
+      suggested = byLoad[0];
+      reason = `No mapped pools yet, so ${suggested.dayName} (your lightest day) is a good place to start.`;
+    }
+
+    return json({ suggestedDay: suggested.day, suggestedDayName: suggested.dayName, reason, perDay });
   })
 );
 

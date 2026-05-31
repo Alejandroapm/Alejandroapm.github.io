@@ -1,4 +1,5 @@
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
+const CENSUS = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress";
 const USER_AGENT = "MSGPoolServices/1.0 (admin route planner)";
 
 import {
@@ -6,6 +7,58 @@ import {
   isFloridaNominatimItem,
   floridaSearchParams,
 } from "./florida.js";
+
+/** Common US street-type abbreviations → full names (helps OpenStreetMap matching). */
+const STREET_ABBR = {
+  st: "Street", str: "Street", ave: "Avenue", av: "Avenue", blvd: "Boulevard",
+  rd: "Road", dr: "Drive", ln: "Lane", ct: "Court", cir: "Circle", crcl: "Circle",
+  pl: "Place", ter: "Terrace", terr: "Terrace", trl: "Trail", pkwy: "Parkway",
+  hwy: "Highway", sq: "Square", cv: "Cove", xing: "Crossing", pt: "Point",
+  plz: "Plaza", bnd: "Bend", crk: "Creek", spg: "Spring", spgs: "Springs",
+  mnr: "Manor", grn: "Green", gln: "Glen", vw: "View", vly: "Valley",
+  expy: "Expressway", fwy: "Freeway", loop: "Loop", run: "Run", way: "Way",
+};
+
+/** Expand street-type abbreviations (skips the leading token, usually the house number). */
+function expandStreet(street) {
+  const tokens = String(street || "").trim().split(/\s+/);
+  return tokens
+    .map((tok, i) => {
+      if (i === 0) return tok;
+      const key = tok.replace(/\.$/, "").toLowerCase();
+      return STREET_ABBR[key] || tok;
+    })
+    .join(" ");
+}
+
+/** US Census geocoder — free, no key, very reliable for exact US residential addresses. */
+async function censusGeocode({ street, city, state, zip }) {
+  const oneline = `${street}, ${city}, ${state || "FL"} ${zip}`.trim();
+  const params = new URLSearchParams({
+    address: oneline,
+    benchmark: "Public_AR_Current",
+    format: "json",
+  });
+  let res;
+  try {
+    res = await fetch(`${CENSUS}?${params}`, { headers: { Accept: "application/json" } });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
+  const match = data?.result?.addressMatches?.[0];
+  const lng = Number(match?.coordinates?.x);
+  const lat = Number(match?.coordinates?.y);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!isInFlorida(lat, lng)) return null;
+  return { lat, lng, approximate: false };
+}
 
 export function formatAddress(row) {
   if (row.street && row.city && row.state && row.zip) {
@@ -21,6 +74,14 @@ async function nominatimFetch(params) {
   });
   if (!res.ok) throw new Error("Geocoding service unavailable.");
   return res.json();
+}
+
+async function safeNominatim(params) {
+  try {
+    return await nominatimFetch(params);
+  } catch {
+    return [];
+  }
 }
 
 function pickBestFloridaResult(results, street) {
@@ -48,31 +109,41 @@ export async function geocodeAddress({ street, city, state, zip }) {
   if (state && state.toUpperCase() !== "FL") return null;
   if (!street || !city || !zip) return null;
 
-  const structured = floridaSearchParams({
-    street,
-    city,
-    state: "Florida",
-    postalcode: zip,
-    country: "United States",
-    limit: "5",
-  });
+  // 1) US Census geocoder first — best hit rate for exact US residential addresses.
+  const census = await censusGeocode({ street, city, state: "FL", zip });
+  if (census) return census;
 
-  let results = await nominatimFetch(structured);
-  let best = pickBestFloridaResult(results, street);
-  if (best) {
-    const coords = resultToCoords(best, false);
-    if (coords) return coords;
-  }
+  // 2) OpenStreetMap / Nominatim, trying both the raw and the abbreviation-expanded street.
+  const variants = [street];
+  const expanded = expandStreet(street);
+  if (expanded && expanded.toLowerCase() !== street.toLowerCase()) variants.push(expanded);
 
-  const freeform = floridaSearchParams({
-    q: `${street}, ${city}, FL ${zip}, USA`,
-    limit: "5",
-  });
-  results = await nominatimFetch(freeform);
-  best = pickBestFloridaResult(results, street);
-  if (best) {
-    const coords = resultToCoords(best, false);
-    if (coords) return coords;
+  for (const s of variants) {
+    const structured = floridaSearchParams({
+      street: s,
+      city,
+      state: "Florida",
+      postalcode: zip,
+      country: "United States",
+      limit: "5",
+    });
+    let results = await safeNominatim(structured);
+    let best = pickBestFloridaResult(results, s);
+    if (best) {
+      const coords = resultToCoords(best, false);
+      if (coords) return coords;
+    }
+
+    const freeform = floridaSearchParams({
+      q: `${s}, ${city}, FL ${zip}, USA`,
+      limit: "5",
+    });
+    results = await safeNominatim(freeform);
+    best = pickBestFloridaResult(results, s);
+    if (best) {
+      const coords = resultToCoords(best, false);
+      if (coords) return coords;
+    }
   }
 
   return null;
