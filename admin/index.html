@@ -56,6 +56,8 @@
 
           <button type="button" class="admin-nav__btn is-active" data-view="calendar">Calendar</button>
 
+          <button type="button" class="admin-nav__btn admin-nav__btn--accent" data-view="workday">Work day</button>
+
           <button type="button" class="admin-nav__btn" data-view="route">Route planner</button>
 
           <button type="button" class="admin-nav__btn" data-view="map">Customer map</button>
@@ -518,6 +520,28 @@
 
         </section>
 
+        <!-- Work day view -->
+
+        <section class="admin-view" id="view-workday" hidden>
+
+          <div class="admin-toolbar">
+
+            <div>
+
+              <h1>Work day</h1>
+
+              <p class="muted section__lead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
+
+            </div>
+
+            <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn">Download work log (CSV)</button>
+
+          </div>
+
+          <div id="workdayBody"></div>
+
+        </section>
+
       </div>
 
     </div>
@@ -542,7 +566,37 @@
 
   </dialog>
 
+  <!-- Navigation app chooser -->
 
+  <dialog class="sheet" id="navModal">
+
+    <div class="sheet__header">
+
+      <h2 id="navModalTitle">Navigate to</h2>
+
+      <button type="button" class="day-modal__close" id="closeNavModal" aria-label="Close">×</button>
+
+    </div>
+
+    <div class="sheet__body" id="navModalBody"></div>
+
+  </dialog>
+
+  <!-- Job panel -->
+
+  <dialog class="job-modal" id="jobModal">
+
+    <div class="job-modal__header">
+
+      <h2 id="jobModalTitle">Job</h2>
+
+      <button type="button" class="day-modal__close" id="closeJobModal" aria-label="Close">×</button>
+
+    </div>
+
+    <div class="job-modal__body" id="jobModalBody"></div>
+
+  </dialog>
 
   <script type="module" src="dashboard.js"></script>
 

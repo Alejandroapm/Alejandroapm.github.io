@@ -44,5 +44,65 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS message_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER,
+  customer_name TEXT,
+  phone TEXT,
+  original_text TEXT NOT NULL,
+  sent_text TEXT NOT NULL,
+  language TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS work_days (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  started_at INTEGER,
+  ended_at INTEGER,
+  start_lat REAL,
+  start_lng REAL,
+  total_miles REAL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS work_stops (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_day_id INTEGER NOT NULL,
+  customer_id INTEGER,
+  customer_name TEXT,
+  address TEXT,
+  phone TEXT,
+  lat REAL,
+  lng REAL,
+  seq INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  arrived_at INTEGER,
+  started_at INTEGER,
+  completed_at INTEGER,
+  miles_from_prev REAL,
+  notes TEXT,
+  customer_notes TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS work_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_day_id INTEGER NOT NULL,
+  stop_id INTEGER,
+  customer_id INTEGER,
+  type TEXT NOT NULL,
+  lat REAL,
+  lng REAL,
+  miles REAL DEFAULT 0,
+  ts INTEGER NOT NULL,
+  meta TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_customers_day ON customers(service_day_of_week);
 CREATE INDEX IF NOT EXISTS idx_overrides_date ON service_overrides(date);
+CREATE INDEX IF NOT EXISTS idx_message_logs_created ON message_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_work_days_status ON work_days(status);
+CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id);
+CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id);

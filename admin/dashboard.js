@@ -1,4 +1,4 @@
-import { api, requireAdmin, DAYS, DAYS_SHORT, fmtDate, esc, setStatus, formatAddress, adminPageUrl } from "../js/api-client.js";
+import { api, requireAdmin, DAYS, DAYS_SHORT, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin } from "../js/api-client.js";
 import { loadLeaflet, createMap, drawRoute, drawCustomers, refreshMap } from "../js/admin-maps.js";
 import { attachAddressAutocomplete, pickedCoordsPayload, clearPickedCoords } from "../js/address-autocomplete.js";
 
@@ -23,6 +23,7 @@ const views = {
   map: document.getElementById("view-map"),
   customers: document.getElementById("view-customers"),
   messages: document.getElementById("view-messages"),
+  workday: document.getElementById("view-workday"),
   add: document.getElementById("view-add"),
 };
 
@@ -56,6 +57,7 @@ function switchView(name) {
 
   if (name === "customers") loadCustomerList();
   if (name === "messages") initMessages();
+  if (name === "workday") initWorkday();
   if (name === "add") resetForm();
   if (name === "route") {
     loadRouteStartForm().then(() => ensureRouteMap());
@@ -821,6 +823,586 @@ document.querySelectorAll('input[name="msgMode"]').forEach((radio) => {
 
 document.getElementById("msgTranslateBtn")?.addEventListener("click", composeMessage);
 document.getElementById("msgLogRefresh")?.addEventListener("click", loadMessageLog);
+
+// ---- Work day ----
+let workday = null;
+let workdayBusy = false;
+let jobLang = "en";
+let jobState = { stopId: null, messagePhotos: [], messageText: "", completionPhotos: [] };
+
+const jobModal = document.getElementById("jobModal");
+const navModal = document.getElementById("navModal");
+
+const COMPLETION_MSG = {
+  en: (name) => `Hi${name ? ` ${name}` : ""}, your pool service is complete for today. Everything looks great. Thank you! — MSG Pool Services`,
+  es: (name) => `Hola${name ? ` ${name}` : ""}, el servicio de su piscina ya quedó completo por hoy. Todo se ve muy bien. ¡Gracias! — MSG Pool Services`,
+};
+
+function getPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
+    );
+  });
+}
+
+function fmtTime(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function firstName(name) {
+  return String(name || "").trim().split(/\s+/)[0] || "";
+}
+
+async function initWorkday() {
+  const body = document.getElementById("workdayBody");
+  body.innerHTML = `<p class="muted">Loading…</p>`;
+  try {
+    const { workday: wd } = await api("/api/admin/workday/active");
+    workday = wd;
+    renderWorkday();
+  } catch (err) {
+    body.innerHTML = `<p class="form-status--error">${esc(err.message)}</p>`;
+  }
+}
+
+function activeStopIndex() {
+  if (!workday?.stops) return -1;
+  return workday.stops.findIndex((s) => s.status !== "completed" && s.status !== "skipped");
+}
+
+function renderWorkday() {
+  const body = document.getElementById("workdayBody");
+  if (!workday) return renderStartScreen(body);
+  if (workday.status === "ended") return renderSummaryScreen(body);
+  renderActiveDay(body);
+}
+
+async function renderStartScreen(body) {
+  const today = fmtDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+  body.innerHTML = `
+    <div class="workday-start card">
+      <h2>Start your work day</h2>
+      <p class="muted">We'll build today's optimized route and guide you stop by stop.</p>
+      <div class="form-row">
+        <label for="workdayDate">Date</label>
+        <input type="date" id="workdayDate" value="${today}" />
+      </div>
+      <p class="workday-start__count muted" id="workdayCount">Checking today's schedule…</p>
+      <button type="button" class="btn btn--block" id="startDayBtn">Start day</button>
+      <p class="fineprint" id="workdayStartStatus" aria-live="polite"></p>
+    </div>
+  `;
+  const dateInput = document.getElementById("workdayDate");
+  const updateCount = async () => {
+    const countEl = document.getElementById("workdayCount");
+    try {
+      const { customers } = await api(`/api/admin/day?date=${dateInput.value}`);
+      countEl.textContent = customers.length
+        ? `${customers.length} pool${customers.length === 1 ? "" : "s"} scheduled for this date.`
+        : "No pools scheduled for this date.";
+    } catch {
+      countEl.textContent = "";
+    }
+  };
+  dateInput.addEventListener("change", updateCount);
+  updateCount();
+  document.getElementById("startDayBtn").addEventListener("click", () => startDay(dateInput.value));
+}
+
+async function startDay(date) {
+  if (workdayBusy) return;
+  const statusEl = document.getElementById("workdayStartStatus");
+  const btn = document.getElementById("startDayBtn");
+  workdayBusy = true;
+  btn.disabled = true;
+  setStatus(statusEl, "Getting your location and building the route… this can take a moment.");
+  const coords = await getPosition();
+  try {
+    const { workday: wd } = await api("/api/admin/workday/start", {
+      method: "POST",
+      body: JSON.stringify({ date, ...(coords || {}) }),
+    });
+    workday = wd;
+    renderWorkday();
+  } catch (err) {
+    setStatus(statusEl, err.message, "error");
+    btn.disabled = false;
+  } finally {
+    workdayBusy = false;
+  }
+}
+
+function renderActiveDay(body) {
+  const stops = workday.stops || [];
+  const total = stops.length;
+  const done = stops.filter((s) => s.status === "completed").length;
+  const activeIdx = activeStopIndex();
+
+  if (!total) {
+    body.innerHTML = `
+      <div class="workday-bar card">
+        <div><strong>${esc(workday.dayName)}</strong><p class="muted">No stops on this route.</p></div>
+        <button type="button" class="btn btn--ghost btn--small" id="endDayBtn">End day</button>
+      </div>`;
+    document.getElementById("endDayBtn").addEventListener("click", endDay);
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="workday-bar card">
+      <div>
+        <strong>${esc(workday.dayName)}</strong>
+        <p class="muted">${done} of ${total} done · started ${esc(fmtTime(workday.startedAt))}</p>
+      </div>
+      <button type="button" class="btn btn--ghost btn--small" id="endDayBtn">End day</button>
+    </div>
+    <div class="workday-progress"><span style="width:${total ? Math.round((done / total) * 100) : 0}%"></span></div>
+    <div class="workday-stops">
+      ${stops.map((s, i) => renderStopCard(s, i, activeIdx)).join("")}
+    </div>
+  `;
+
+  document.getElementById("endDayBtn").addEventListener("click", endDay);
+  bindStopActions(body);
+}
+
+function renderStopCard(stop, idx, activeIdx) {
+  const isActive = idx === activeIdx;
+  const isLocked = activeIdx !== -1 && idx > activeIdx;
+  const stateClass = stop.status === "completed"
+    ? "is-done"
+    : stop.status === "skipped"
+      ? "is-skipped"
+      : isActive
+        ? "is-active"
+        : isLocked
+          ? "is-locked"
+          : "";
+
+  const badge = stop.status === "completed"
+    ? `<span class="tag tag--mapped">Done ${esc(fmtTime(stop.completedAt))}</span>`
+    : stop.status === "skipped"
+      ? `<span class="tag tag--skip">Skipped</span>`
+      : stop.status === "in_progress"
+        ? `<span class="tag tag--extra">In progress</span>`
+        : isActive
+          ? `<span class="tag tag--extra">Next stop</span>`
+          : "";
+
+  let actions = "";
+  if (isActive) {
+    actions = `
+      <div class="workday-stop__actions">
+        ${stop.navigable ? `<button type="button" class="btn btn--small" data-nav="${stop.id}">Navigate</button>` : `<span class="tag tag--warn">No map location</span>`}
+        ${stop.status === "in_progress"
+          ? `<button type="button" class="btn btn--small" data-job="${stop.id}">Open job</button>`
+          : `<button type="button" class="btn btn--small" data-startjob="${stop.id}">Start job</button>`}
+        <button type="button" class="btn btn--ghost btn--small" data-job="${stop.id}">Complete job</button>
+        <button type="button" class="btn btn--ghost btn--small" data-skip="${stop.id}">Skip</button>
+      </div>`;
+  }
+
+  return `
+    <article class="workday-stop ${stateClass}" data-stop="${stop.id}">
+      <div class="workday-stop__seq">${stop.status === "completed" ? "✓" : stop.seq}</div>
+      <div class="workday-stop__main">
+        <div class="workday-stop__head">
+          <strong>${esc(stop.name)}</strong>
+          ${badge}
+        </div>
+        <p class="muted">${esc(stop.address)}</p>
+        ${stop.phone ? `<p class="fineprint"><a href="tel:${esc(stop.phone)}">${esc(stop.phone)}</a></p>` : ""}
+        ${stop.customerNotes ? `<p class="workday-stop__note"><strong>Note:</strong> ${esc(stop.customerNotes)}</p>` : ""}
+        ${actions}
+      </div>
+    </article>
+  `;
+}
+
+function bindStopActions(scope) {
+  scope.querySelectorAll("[data-nav]").forEach((b) =>
+    b.addEventListener("click", () => openNavChooser(findStop(Number(b.dataset.nav))))
+  );
+  scope.querySelectorAll("[data-startjob]").forEach((b) =>
+    b.addEventListener("click", () => doStartJob(Number(b.dataset.startjob)))
+  );
+  scope.querySelectorAll("[data-job]").forEach((b) =>
+    b.addEventListener("click", () => openJobPanel(findStop(Number(b.dataset.job))))
+  );
+  scope.querySelectorAll("[data-skip]").forEach((b) =>
+    b.addEventListener("click", () => skipCurrentStop(Number(b.dataset.skip)))
+  );
+}
+
+function findStop(id) {
+  return (workday?.stops || []).find((s) => s.id === id);
+}
+
+function openNavChooser(stop) {
+  if (!stop || !stop.navigable) return;
+  document.getElementById("navModalTitle").textContent = `Navigate to ${stop.name}`;
+  const dest = `${stop.lat},${stop.lng}`;
+  const label = encodeURIComponent(`${stop.name} - ${stop.address}`);
+  const apps = [
+    { name: "Google Maps", href: `https://www.google.com/maps/dir/?api=1&destination=${dest}` },
+    { name: "Apple Maps", href: `https://maps.apple.com/?daddr=${dest}` },
+    { name: "Waze", href: `https://waze.com/ul?ll=${dest}&navigate=yes` },
+    { name: "Other / default maps app", href: `geo:${dest}?q=${dest}(${label})` },
+  ];
+  document.getElementById("navModalBody").innerHTML = apps
+    .map((a) => `<a class="btn btn--block sheet__option" target="_blank" rel="noopener" href="${a.href}">${a.name}</a>`)
+    .join("");
+
+  document.getElementById("navModalBody").querySelectorAll("a").forEach((a) => {
+    a.addEventListener("click", async () => {
+      navModal.close();
+      const coords = await getPosition();
+      try {
+        await api(`/api/admin/workday/${workday.id}/navigate`, {
+          method: "POST",
+          body: JSON.stringify({ stopId: stop.id, ...(coords || {}) }),
+        });
+      } catch { /* navigation logging is best-effort */ }
+    });
+  });
+  navModal.showModal();
+}
+
+async function doStartJob(stopId) {
+  const coords = await getPosition();
+  try {
+    const { workday: wd } = await api(`/api/admin/workday/stop/${stopId}/start`, {
+      method: "POST",
+      body: JSON.stringify(coords || {}),
+    });
+    workday = wd;
+    renderWorkday();
+    openJobPanel(findStop(stopId));
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function skipCurrentStop(stopId) {
+  if (!confirm("Skip this stop for today?")) return;
+  const coords = await getPosition();
+  try {
+    const { workday: wd } = await api(`/api/admin/workday/stop/${stopId}/skip`, {
+      method: "POST",
+      body: JSON.stringify(coords || {}),
+    });
+    workday = wd;
+    renderWorkday();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function openJobPanel(stop) {
+  if (!stop) return;
+  jobState = { stopId: stop.id, messagePhotos: [], messageText: "", completionPhotos: [] };
+  document.getElementById("jobModalTitle").textContent = stop.name;
+  const langBtns = (group) => `
+    <div class="msg-lang" data-lang-group="${group}">
+      <button type="button" class="btn btn--small ${jobLang === "en" ? "is-active" : "btn--ghost"}" data-job-lang="en">English</button>
+      <button type="button" class="btn btn--small ${jobLang === "es" ? "is-active" : "btn--ghost"}" data-job-lang="es">Spanish</button>
+    </div>`;
+
+  document.getElementById("jobModalBody").innerHTML = `
+    <p class="muted job-modal__addr">${esc(stop.address)}</p>
+    ${stop.navigable ? `<button type="button" class="btn btn--ghost btn--small" id="jobNavBtn">Navigate here</button>` : ""}
+    ${stop.customerNotes ? `<div class="job-callout"><strong>Customer note:</strong> ${esc(stop.customerNotes)}</div>` : ""}
+
+    <div class="form-row">
+      <label for="jobNotes">Your private notes for this job</label>
+      <textarea id="jobNotes" rows="3" placeholder="Chemicals added, issues found, follow-ups…">${esc(stop.notes || "")}</textarea>
+      <p class="fineprint" id="jobNotesStatus" aria-live="polite"></p>
+    </div>
+
+    <hr class="hr" />
+
+    <div class="job-section">
+      <h3>Message ${esc(firstName(stop.name)) || "customer"}</h3>
+      <p class="fineprint">Write in Spanish. Pick the language the customer receives, attach photos, then share to your messaging app.</p>
+      <textarea id="jobMsgInput" rows="3" placeholder="Ej.: Encontré un problema con la bomba…"></textarea>
+      <label class="fineprint">Customer receives it in</label>
+      ${langBtns("message")}
+      <div class="job-photos">
+        <label class="btn btn--ghost btn--small job-photo-add">
+          + Add photo
+          <input type="file" accept="image/*" capture="environment" multiple hidden id="jobMsgPhotos" />
+        </label>
+        <div class="job-photo-thumbs" id="jobMsgThumbs"></div>
+      </div>
+      <button type="button" class="btn btn--small" id="jobMsgPreviewBtn">Preview &amp; prepare</button>
+      <div class="msg-preview" id="jobMsgPreview" hidden>
+        <label>Customer will receive</label>
+        <p class="msg-preview__text" id="jobMsgPreviewText"></p>
+      </div>
+      <button type="button" class="btn btn--block" id="jobMsgShareBtn" hidden>Share to customer</button>
+      <p class="fineprint" id="jobMsgStatus" aria-live="polite"></p>
+    </div>
+
+    <hr class="hr" />
+
+    <div class="job-section job-section--complete">
+      <h3>Complete job</h3>
+      <p class="fineprint">A completion message is ready. Attach a photo of the clean pool, share it, then mark the job complete.</p>
+      <textarea id="jobDoneMsg" rows="3">${esc(COMPLETION_MSG[jobLang](firstName(stop.name)))}</textarea>
+      ${langBtns("complete")}
+      <div class="job-photos">
+        <label class="btn btn--ghost btn--small job-photo-add">
+          + Add pool photo
+          <input type="file" accept="image/*" capture="environment" multiple hidden id="jobDonePhotos" />
+        </label>
+        <div class="job-photo-thumbs" id="jobDoneThumbs"></div>
+      </div>
+      <button type="button" class="btn btn--ghost btn--block" id="jobDoneShareBtn">Share completion message</button>
+      <button type="button" class="btn btn--block" id="jobCompleteBtn">Mark job complete</button>
+      <p class="fineprint" id="jobDoneStatus" aria-live="polite"></p>
+    </div>
+  `;
+
+  bindJobPanel(stop);
+  jobModal.showModal();
+}
+
+function renderThumbs(container, files, onRemove) {
+  container.innerHTML = files
+    .map((f, i) => `<div class="job-thumb"><img src="${URL.createObjectURL(f)}" alt="" /><button type="button" data-rm="${i}" aria-label="Remove">×</button></div>`)
+    .join("");
+  container.querySelectorAll("[data-rm]").forEach((b) =>
+    b.addEventListener("click", () => onRemove(Number(b.dataset.rm)))
+  );
+}
+
+function bindJobPanel(stop) {
+  document.getElementById("jobNavBtn")?.addEventListener("click", () => openNavChooser(stop));
+
+  // Private notes autosave (debounced).
+  const notesEl = document.getElementById("jobNotes");
+  let notesTimer = null;
+  notesEl.addEventListener("input", () => {
+    clearTimeout(notesTimer);
+    notesTimer = setTimeout(async () => {
+      try {
+        await api(`/api/admin/workday/stop/${stop.id}/notes`, {
+          method: "POST",
+          body: JSON.stringify({ notes: notesEl.value }),
+        });
+        const local = findStop(stop.id);
+        if (local) local.notes = notesEl.value;
+        setStatus(document.getElementById("jobNotesStatus"), "Saved.", "success");
+      } catch {
+        setStatus(document.getElementById("jobNotesStatus"), "Couldn't save notes.", "error");
+      }
+    }, 700);
+  });
+
+  // Language toggles (shared across both sections).
+  document.querySelectorAll("#jobModalBody [data-job-lang]").forEach((b) =>
+    b.addEventListener("click", () => {
+      jobLang = b.dataset.jobLang;
+      document.querySelectorAll("#jobModalBody [data-job-lang]").forEach((x) => {
+        const active = x.dataset.jobLang === jobLang;
+        x.classList.toggle("is-active", active);
+        x.classList.toggle("btn--ghost", !active);
+      });
+      document.getElementById("jobDoneMsg").value = COMPLETION_MSG[jobLang](firstName(stop.name));
+      document.getElementById("jobMsgPreview").hidden = true;
+      document.getElementById("jobMsgShareBtn").hidden = true;
+    })
+  );
+
+  // Message photos.
+  const msgThumbs = document.getElementById("jobMsgThumbs");
+  const rerenderMsgThumbs = () =>
+    renderThumbs(msgThumbs, jobState.messagePhotos, (i) => {
+      jobState.messagePhotos.splice(i, 1);
+      rerenderMsgThumbs();
+    });
+  document.getElementById("jobMsgPhotos").addEventListener("change", (e) => {
+    jobState.messagePhotos.push(...Array.from(e.target.files || []));
+    rerenderMsgThumbs();
+    e.target.value = "";
+  });
+
+  // Completion photos.
+  const doneThumbs = document.getElementById("jobDoneThumbs");
+  const rerenderDoneThumbs = () =>
+    renderThumbs(doneThumbs, jobState.completionPhotos, (i) => {
+      jobState.completionPhotos.splice(i, 1);
+      rerenderDoneThumbs();
+    });
+  document.getElementById("jobDonePhotos").addEventListener("change", (e) => {
+    jobState.completionPhotos.push(...Array.from(e.target.files || []));
+    rerenderDoneThumbs();
+    e.target.value = "";
+  });
+
+  // Preview & prepare the custom message (translate).
+  document.getElementById("jobMsgPreviewBtn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("jobMsgStatus");
+    const text = document.getElementById("jobMsgInput").value.trim();
+    if (!text) { setStatus(statusEl, "Write a message first.", "error"); return; }
+    setStatus(statusEl, "Polishing message…");
+    try {
+      const { translated } = await api("/api/admin/translate", {
+        method: "POST",
+        body: JSON.stringify({ text, source: "es", target: jobLang }),
+      });
+      jobState.messageText = translated || text;
+      document.getElementById("jobMsgPreviewText").textContent = jobState.messageText;
+      document.getElementById("jobMsgPreview").hidden = false;
+      document.getElementById("jobMsgShareBtn").hidden = false;
+      setStatus(statusEl, "");
+    } catch (err) {
+      setStatus(statusEl, err.message, "error");
+    }
+  });
+
+  // Share custom message.
+  document.getElementById("jobMsgShareBtn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("jobMsgStatus");
+    const text = jobState.messageText || document.getElementById("jobMsgInput").value.trim();
+    if (!text) return;
+    const res = await shareToCustomer({ phone: stop.phone, text, files: jobState.messagePhotos });
+    reportShare(statusEl, res, jobState.messagePhotos.length);
+    if (res.shared) {
+      logMessage({
+        customerId: stop.customerId || null,
+        customerName: stop.name,
+        phone: stop.phone || "",
+        originalText: document.getElementById("jobMsgInput").value.trim(),
+        sentText: text,
+        language: jobLang,
+      });
+    }
+  });
+
+  // Share completion message.
+  document.getElementById("jobDoneShareBtn").addEventListener("click", async () => {
+    const statusEl = document.getElementById("jobDoneStatus");
+    const text = document.getElementById("jobDoneMsg").value.trim();
+    const res = await shareToCustomer({ phone: stop.phone, text, files: jobState.completionPhotos });
+    reportShare(statusEl, res, jobState.completionPhotos.length);
+    if (res.shared) {
+      logMessage({
+        customerId: stop.customerId || null,
+        customerName: stop.name,
+        phone: stop.phone || "",
+        originalText: "(completion message)",
+        sentText: text,
+        language: jobLang,
+      });
+    }
+  });
+
+  // Mark complete.
+  document.getElementById("jobCompleteBtn").addEventListener("click", () => doComplete(stop.id, notesEl.value));
+}
+
+function reportShare(statusEl, res, photoCount) {
+  if (res.cancelled) { setStatus(statusEl, "Share cancelled.", ""); return; }
+  if (!res.shared) { setStatus(statusEl, "Add a phone number or use a device that supports sharing.", "error"); return; }
+  if (photoCount && !res.withFiles) {
+    setStatus(statusEl, "Message opened. Your device couldn't attach the photo automatically — add it in your messaging app.", "");
+  } else {
+    setStatus(statusEl, "Opened your messaging app.", "success");
+  }
+}
+
+async function shareToCustomer({ phone, text, files = [] }) {
+  const cleanPhone = (phone || "").replace(/[^\d+]/g, "");
+  try {
+    if (navigator.share) {
+      const data = { text };
+      if (files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
+      await navigator.share(data);
+      return { shared: true, withFiles: !!data.files };
+    }
+  } catch (err) {
+    if (err && err.name === "AbortError") return { shared: false, cancelled: true };
+  }
+  if (cleanPhone) {
+    window.location.href = `sms:${cleanPhone}?&body=${encodeURIComponent(text)}`;
+    return { shared: true, withFiles: false, viaSms: true };
+  }
+  return { shared: false };
+}
+
+async function doComplete(stopId, notes) {
+  const coords = await getPosition();
+  try {
+    const { workday: wd } = await api(`/api/admin/workday/stop/${stopId}/complete`, {
+      method: "POST",
+      body: JSON.stringify({ notes: notes || "", ...(coords || {}) }),
+    });
+    workday = wd;
+    jobModal.close();
+    renderWorkday();
+  } catch (err) {
+    setStatus(document.getElementById("jobDoneStatus"), err.message, "error");
+  }
+}
+
+async function endDay() {
+  if (!workday || !confirm("End the work day? You can download the log afterwards.")) return;
+  const coords = await getPosition();
+  try {
+    const { workday: wd } = await api(`/api/admin/workday/${workday.id}/end`, {
+      method: "POST",
+      body: JSON.stringify(coords || {}),
+    });
+    workday = wd;
+    renderWorkday();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function renderSummaryScreen(body) {
+  const stops = workday.stops || [];
+  const done = stops.filter((s) => s.status === "completed").length;
+  const skipped = stops.filter((s) => s.status === "skipped").length;
+  const mins = workday.startedAt && workday.endedAt ? Math.round((workday.endedAt - workday.startedAt) / 60000) : null;
+  const hrs = mins != null ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—";
+  body.innerHTML = `
+    <div class="workday-summary card">
+      <h2>Day complete</h2>
+      <div class="workday-summary__grid">
+        <div><span class="workday-summary__num">${done}</span><span class="muted">jobs done</span></div>
+        <div><span class="workday-summary__num">${skipped}</span><span class="muted">skipped</span></div>
+        <div><span class="workday-summary__num">${workday.totalMiles ?? 0}</span><span class="muted">miles</span></div>
+        <div><span class="workday-summary__num">${hrs}</span><span class="muted">on the road</span></div>
+      </div>
+      <button type="button" class="btn btn--block" id="exportLogBtn2">Download work log (CSV)</button>
+      <button type="button" class="btn btn--ghost btn--block" id="newDayBtn">Start a new day</button>
+    </div>
+  `;
+  document.getElementById("exportLogBtn2").addEventListener("click", downloadWorkLog);
+  document.getElementById("newDayBtn").addEventListener("click", () => { workday = null; renderWorkday(); });
+}
+
+function downloadWorkLog() {
+  const a = document.createElement("a");
+  a.href = `${getServerOrigin()}/api/admin/workday/export.csv`;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+document.getElementById("exportLogBtn")?.addEventListener("click", downloadWorkLog);
+document.getElementById("closeJobModal")?.addEventListener("click", () => jobModal.close());
+document.getElementById("closeNavModal")?.addEventListener("click", () => navModal.close());
+jobModal?.addEventListener("click", (e) => { if (e.target === jobModal) jobModal.close(); });
+navModal?.addEventListener("click", (e) => { if (e.target === navModal) navModal.close(); });
 
 await Promise.all([renderCalendar(), loadStats()]);
 

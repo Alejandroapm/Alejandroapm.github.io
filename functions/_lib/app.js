@@ -29,6 +29,17 @@ import {
 import { suggestAddresses } from "./addressSuggest.js";
 import { buildOptimizedRoute } from "./routeBuilder.js";
 import { geocodeAddress } from "./geocode.js";
+import {
+  startWorkday,
+  getActiveWorkday,
+  logNavigate,
+  startJob,
+  completeJob,
+  skipStop,
+  saveStopNotes,
+  endWorkday,
+  exportWorkdaysCsv,
+} from "./workday.js";
 
 function haversineMiles(lat1, lng1, lat2, lng2) {
   const R = 3958.8;
@@ -573,6 +584,97 @@ app.delete("/api/admin/messages/:id", async (c) =>
     if (!id) return json({ error: "Invalid message id." }, 400);
     await ctx.env.DB.prepare("DELETE FROM message_logs WHERE id = ?").bind(id).run();
     return json({ ok: true });
+  })
+);
+
+// ---- Work day ----
+app.get("/api/admin/workday/active", async (c) =>
+  withAdmin(c, async (ctx) => json({ workday: await getActiveWorkday(ctx.env.DB) }))
+);
+
+app.post("/api/admin/workday/start", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json();
+    const date = String(body.date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ error: "Provide date as YYYY-MM-DD." }, 400);
+    try {
+      const { workday, resumed } = await startWorkday(ctx.env.DB, ctx.env, date, coordsFromBody(body));
+      return json({ workday, resumed });
+    } catch {
+      return json({ error: "Could not start the work day." }, 500);
+    }
+  })
+);
+
+app.post("/api/admin/workday/:id/navigate", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json().catch(() => ({}));
+    const workday = await logNavigate(
+      ctx.env.DB,
+      Number(ctx.req.param("id")),
+      body.stopId ? Number(body.stopId) : null,
+      coordsFromBody(body)
+    );
+    if (!workday) return json({ error: "Work day not found." }, 404);
+    return json({ workday });
+  })
+);
+
+app.post("/api/admin/workday/:id/end", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json().catch(() => ({}));
+    const workday = await endWorkday(ctx.env.DB, Number(ctx.req.param("id")), coordsFromBody(body));
+    if (!workday) return json({ error: "Work day not found." }, 404);
+    return json({ workday });
+  })
+);
+
+app.post("/api/admin/workday/stop/:stopId/start", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json().catch(() => ({}));
+    const workday = await startJob(ctx.env.DB, Number(ctx.req.param("stopId")), coordsFromBody(body));
+    if (!workday) return json({ error: "Stop not found." }, 404);
+    return json({ workday });
+  })
+);
+
+app.post("/api/admin/workday/stop/:stopId/complete", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json().catch(() => ({}));
+    const notes = body.notes != null ? String(body.notes) : null;
+    const workday = await completeJob(ctx.env.DB, Number(ctx.req.param("stopId")), coordsFromBody(body), notes);
+    if (!workday) return json({ error: "Stop not found." }, 404);
+    return json({ workday });
+  })
+);
+
+app.post("/api/admin/workday/stop/:stopId/skip", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json().catch(() => ({}));
+    const workday = await skipStop(ctx.env.DB, Number(ctx.req.param("stopId")), coordsFromBody(body));
+    if (!workday) return json({ error: "Stop not found." }, 404);
+    return json({ workday });
+  })
+);
+
+app.post("/api/admin/workday/stop/:stopId/notes", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json().catch(() => ({}));
+    const workday = await saveStopNotes(ctx.env.DB, Number(ctx.req.param("stopId")), body.notes || "");
+    if (!workday) return json({ error: "Stop not found." }, 404);
+    return json({ workday });
+  })
+);
+
+app.get("/api/admin/workday/export.csv", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const csv = await exportWorkdaysCsv(ctx.env.DB);
+    return new Response(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="workday-log-${new Date().toISOString().slice(0, 10)}.csv"`,
+      },
+    });
   })
 );
 
