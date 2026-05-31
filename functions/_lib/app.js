@@ -407,6 +407,11 @@ app.put("/api/admin/settings/route-start", async (c) =>
 
 app.post("/api/admin/map/geocode", async (c) =>
   withAdmin(c, async (ctx) => {
+    // ?force=1 re-geocodes every active customer (used to refresh stale pins
+    // after adding the Google Maps key); otherwise only fills in missing ones.
+    if (ctx.req.query("force") === "1") {
+      await ctx.env.DB.prepare("UPDATE customers SET lat = NULL, lng = NULL WHERE active = 1").run();
+    }
     const { results: rows } = await ctx.env.DB.prepare(`
       SELECT * FROM customers WHERE active = 1 AND (lat IS NULL OR lng IS NULL)
     `).all();

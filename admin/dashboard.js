@@ -131,6 +131,10 @@ async function suggestBestDay() {
 
 document.getElementById("loadRouteBtn")?.addEventListener("click", () => loadRoute(routeDateInput.value));
 document.getElementById("refreshMapBtn")?.addEventListener("click", () => loadCustomerMap());
+document.getElementById("relocateAllBtn")?.addEventListener("click", () => {
+  if (!confirm("Re-check every customer's location with Google Maps? This refreshes all map pins and can take a moment.")) return;
+  loadCustomerMap(true);
+});
 
 document.getElementById("routeStartForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -502,13 +506,13 @@ async function loadRoute(dateStr) {
   }
 }
 
-async function loadCustomerMap() {
+async function loadCustomerMap(force = false) {
   await ensureCustomerMap();
   const metaEl = document.querySelector("#view-map .section__lead");
-  metaEl.textContent = "Loading customer locations…";
+  metaEl.textContent = force ? "Re-checking all locations with Google Maps…" : "Loading customer locations…";
 
   try {
-    const { customers, geocoded, attempted } = await api("/api/admin/map/geocode", { method: "POST" });
+    const { customers, geocoded, attempted } = await api(`/api/admin/map/geocode${force ? "?force=1" : ""}`, { method: "POST" });
     const mapped = customers.filter((c) => c.lat != null && c.lng != null);
     const unmapped = customers.length - mapped.length;
 
@@ -998,7 +1002,7 @@ function renderStopCard(stop, idx, activeIdx) {
   if (isActive) {
     actions = `
       <div class="workday-stop__actions">
-        ${stop.navigable ? `<button type="button" class="btn btn--small" data-nav="${stop.id}">Navigate</button>` : `<span class="tag tag--warn">No map location</span>`}
+        ${canNavigate(stop) ? `<button type="button" class="btn btn--small" data-nav="${stop.id}">Navigate</button>` : `<span class="tag tag--warn">No address</span>`}
         ${stop.status === "in_progress"
           ? `<button type="button" class="btn btn--small" data-job="${stop.id}">Open job</button>`
           : `<button type="button" class="btn btn--small" data-startjob="${stop.id}">Start job</button>`}
@@ -1043,16 +1047,23 @@ function findStop(id) {
   return (workday?.stops || []).find((s) => s.id === id);
 }
 
+function canNavigate(stop) {
+  return !!(stop && (stop.address || (stop.lat != null && stop.lng != null)));
+}
+
 function openNavChooser(stop) {
-  if (!stop || !stop.navigable) return;
+  if (!canNavigate(stop)) return;
   document.getElementById("navModalTitle").textContent = `Navigate to ${stop.name}`;
-  const dest = `${stop.lat},${stop.lng}`;
-  const label = encodeURIComponent(`${stop.name} - ${stop.address}`);
+  // Prefer the address text so the maps app resolves the exact house number,
+  // instead of a stored pin that may be interpolated a few houses off.
+  const dest = stop.address
+    ? encodeURIComponent(stop.address)
+    : `${stop.lat},${stop.lng}`;
   const apps = [
     { name: "Google Maps", href: `https://www.google.com/maps/dir/?api=1&destination=${dest}` },
     { name: "Apple Maps", href: `https://maps.apple.com/?daddr=${dest}` },
-    { name: "Waze", href: `https://waze.com/ul?ll=${dest}&navigate=yes` },
-    { name: "Other / default maps app", href: `geo:${dest}?q=${dest}(${label})` },
+    { name: "Waze", href: `https://waze.com/ul?q=${dest}&navigate=yes` },
+    { name: "Other / default maps app", href: `geo:0,0?q=${dest}` },
   ];
   document.getElementById("navModalBody").innerHTML = apps
     .map((a) => `<a class="btn btn--block sheet__option" target="_blank" rel="noopener" href="${a.href}">${a.name}</a>`)
@@ -1115,7 +1126,7 @@ function openJobPanel(stop) {
 
   document.getElementById("jobModalBody").innerHTML = `
     <p class="muted job-modal__addr">${esc(stop.address)}</p>
-    ${stop.navigable ? `<button type="button" class="btn btn--ghost btn--small" id="jobNavBtn">Navigate here</button>` : ""}
+    ${canNavigate(stop) ? `<button type="button" class="btn btn--ghost btn--small" id="jobNavBtn">Navigate here</button>` : ""}
     ${stop.customerNotes ? `<div class="job-callout"><strong>Customer note:</strong> ${esc(stop.customerNotes)}</div>` : ""}
 
     <div class="form-row">
@@ -1309,29 +1320,50 @@ function bindJobPanel(stop) {
 
 function reportShare(statusEl, res, photoCount) {
   if (res.cancelled) { setStatus(statusEl, "Share cancelled.", ""); return; }
-  if (!res.shared) { setStatus(statusEl, "Add a phone number or use a device that supports sharing.", "error"); return; }
-  if (photoCount && !res.withFiles) {
-    setStatus(statusEl, "Message opened. Your device couldn't attach the photo automatically — add it in your messaging app.", "");
+  if (!res.shared) { setStatus(statusEl, "Add a phone number or use a phone that supports sharing.", "error"); return; }
+  if (res.viaSms) {
+    setStatus(statusEl, "Messages opened with the customer selected — just tap send.", "success");
+  } else if (photoCount && res.withFiles) {
+    setStatus(statusEl, "Photo + message ready. Pick the customer and tap send.", "success");
+  } else if (photoCount && !res.withFiles) {
+    setStatus(statusEl, "Message opened, but this phone couldn't auto-attach the photo — add it in Messages.", "");
   } else {
     setStatus(statusEl, "Opened your messaging app.", "success");
   }
 }
 
+/**
+ * Web platforms cannot prefill a recipient AND attach a photo at the same time:
+ * - the native share sheet attaches the photo but you pick the contact;
+ * - an sms: link prefills the contact + text but cannot carry a photo.
+ * So: when there's a photo, share it (photo attached); otherwise open Messages
+ * with the customer already selected and the text ready to send.
+ */
 async function shareToCustomer({ phone, text, files = [] }) {
   const cleanPhone = (phone || "").replace(/[^\d+]/g, "");
-  try {
-    if (navigator.share) {
-      const data = { text };
-      if (files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
-      await navigator.share(data);
-      return { shared: true, withFiles: !!data.files };
+  const canFiles = files.length > 0 && navigator.canShare && navigator.canShare({ files });
+
+  if (navigator.share && (canFiles || !cleanPhone)) {
+    try {
+      await navigator.share(canFiles ? { text, files } : { text });
+      return { shared: true, withFiles: !!canFiles };
+    } catch (err) {
+      if (err && err.name === "AbortError") return { shared: false, cancelled: true };
     }
-  } catch (err) {
-    if (err && err.name === "AbortError") return { shared: false, cancelled: true };
   }
+
   if (cleanPhone) {
     window.location.href = `sms:${cleanPhone}?&body=${encodeURIComponent(text)}`;
     return { shared: true, withFiles: false, viaSms: true };
+  }
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ text });
+      return { shared: true, withFiles: false };
+    } catch (err) {
+      if (err && err.name === "AbortError") return { shared: false, cancelled: true };
+    }
   }
   return { shared: false };
 }
