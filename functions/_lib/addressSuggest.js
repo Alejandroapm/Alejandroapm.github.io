@@ -6,8 +6,9 @@ import {
   floridaSearchParams,
   isFloridaNominatimItem,
   nominatimStateFromAddress,
-  isInFlorida,
+  withinServiceArea,
 } from "./florida.js";
+import { googleSuggest } from "./geocode.js";
 
 /** US Census fallback for full street addresses Nominatim doesn't have (free, no key). */
 async function censusSuggest(query) {
@@ -52,7 +53,7 @@ async function censusSuggest(query) {
         lng,
       };
     })
-    .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng) && isInFlorida(s.lat, s.lng) && (s.street || s.city));
+    .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng) && withinServiceArea(s.lat, s.lng) && (s.street || s.city));
 }
 
 export function parseNominatimResult(item) {
@@ -96,15 +97,30 @@ async function nominatimSuggest(q) {
   return data
     .filter(isFloridaNominatimItem)
     .map(parseNominatimResult)
-    .filter((item) => item.state === "FL" && (item.street || item.city));
+    .filter(
+      (item) =>
+        item.state === "FL" &&
+        (item.street || item.city) &&
+        withinServiceArea(item.lat, item.lng)
+    );
 }
 
-export async function suggestAddresses(query) {
+export async function suggestAddresses(query, env = null) {
   const q = String(query || "").trim();
   if (q.length < 3) return [];
 
-  // Query OpenStreetMap always; also query the US Census geocoder whenever the text
-  // starts with a house number, since OSM frequently misses exact US residences.
+  // 1) Google first when a key is configured — best autocomplete quality.
+  if (env?.GOOGLE_MAPS_API_KEY) {
+    try {
+      const g = await googleSuggest(env, q);
+      if (g.length) return g.slice(0, 8);
+    } catch {
+      // fall through to free providers
+    }
+  }
+
+  // 2) Free providers: OpenStreetMap always; US Census whenever the text starts
+  //    with a house number, since OSM frequently misses exact US residences.
   const hasHouseNumber = /^\s*\d/.test(q);
   const [osm, census] = await Promise.all([
     nominatimSuggest(q),

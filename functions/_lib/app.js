@@ -183,7 +183,7 @@ app.get("/api/admin/address/suggest", async (c) =>
     const q = String(ctx.req.query("q") || "").trim();
     if (q.length < 3) return json({ suggestions: [] });
     try {
-      const suggestions = await suggestAddresses(q);
+      const suggestions = await suggestAddresses(q, ctx.env);
       return json({ suggestions });
     } catch {
       return json({ error: "Address lookup failed." }, 500);
@@ -236,7 +236,7 @@ app.post("/api/admin/customers", async (c) =>
       String(body.notes || "").trim(), now, now
     ).run();
     const id = result.meta.last_row_id;
-    await geocodeAndSaveCustomer(ctx.env.DB, id, addr, coordsFromBody(body));
+    await geocodeAndSaveCustomer(ctx.env.DB, id, addr, coordsFromBody(body), ctx.env);
     const row = await ctx.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(id).first();
     return json({ customer: publicCustomer(row) }, 201);
   })
@@ -283,11 +283,11 @@ app.put("/api/admin/customers/:id", async (c) =>
       addressChanged ? 1 : 0, addressChanged ? 1 : 0, id
     ).run();
 
-    if (addressChanged) await geocodeAndSaveCustomer(ctx.env.DB, id, addr, coordsFromBody(body));
+    if (addressChanged) await geocodeAndSaveCustomer(ctx.env.DB, id, addr, coordsFromBody(body), ctx.env);
     else {
       const picked = coordsFromBody(body);
-      if (picked) await geocodeAndSaveCustomer(ctx.env.DB, id, addr, picked);
-      else if (existing.lat == null) await geocodeAndSaveCustomer(ctx.env.DB, id, addr);
+      if (picked) await geocodeAndSaveCustomer(ctx.env.DB, id, addr, picked, ctx.env);
+      else if (existing.lat == null) await geocodeAndSaveCustomer(ctx.env.DB, id, addr, null, ctx.env);
     }
 
     const row = await ctx.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(id).first();
@@ -365,7 +365,7 @@ app.get("/api/admin/route", async (c) =>
     }
     try {
       const depot = await getRouteDepot(ctx.env.DB);
-      const route = await buildOptimizedRoute(ctx.env.DB, scheduledRows, depot);
+      const route = await buildOptimizedRoute(ctx.env.DB, scheduledRows, depot, ctx.env);
       return json({ date, dayName: DAY_NAMES[d.getDay()], scheduledCount: scheduledRows.length, ...route });
     } catch {
       return json({ error: "Could not build optimized route." }, 500);
@@ -383,7 +383,7 @@ app.put("/api/admin/settings/route-start", async (c) =>
     const addr = parseAddressBody(body);
     if (addr.error) return json({ error: addr.error }, 400);
     try {
-      const saved = await saveRouteStartSetting(ctx.env.DB, addr, coordsFromBody(body));
+      const saved = await saveRouteStartSetting(ctx.env.DB, addr, coordsFromBody(body), ctx.env);
       if (saved.lat == null || saved.lng == null) {
         return json({ error: "Could not locate that start address on the map." }, 400);
       }
@@ -401,7 +401,7 @@ app.post("/api/admin/map/geocode", async (c) =>
     `).all();
     let geocoded = 0;
     for (const row of rows || []) {
-      const coords = await ensureCustomerCoords(ctx.env.DB, row);
+      const coords = await ensureCustomerCoords(ctx.env.DB, row, ctx.env);
       if (coords) geocoded += 1;
       await sleep(250);
     }
@@ -468,7 +468,7 @@ app.post("/api/admin/suggest-day", async (c) =>
     if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
       const addr = parseAddressBody(body);
       if (addr.error) return json({ error: "Pick or enter a valid Florida address first." }, 400);
-      const coords = await geocodeAddress(addr);
+      const coords = await geocodeAddress(addr, ctx.env);
       if (!coords) return json({ error: "Could not locate that address on the map yet." }, 400);
       lat = coords.lat;
       lng = coords.lng;

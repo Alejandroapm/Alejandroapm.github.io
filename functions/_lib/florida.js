@@ -18,6 +18,25 @@ export function isInFlorida(lat, lng) {
   );
 }
 
+/** Service area: 50-mile radius around downtown Orlando. */
+export const ORLANDO = { lat: 28.5383, lng: -81.3792 };
+export const SERVICE_RADIUS_MILES = 50;
+
+export function milesBetween(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function withinServiceArea(lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  return milesBetween(lat, lng, ORLANDO.lat, ORLANDO.lng) <= SERVICE_RADIUS_MILES;
+}
+
 export function isFloridaState(state) {
   if (!state) return false;
   const s = String(state).trim().toUpperCase();

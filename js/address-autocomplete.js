@@ -33,7 +33,7 @@ export function attachAddressAutocomplete(fields, options = {}) {
 
   const hint = document.createElement("p");
   hint.className = "fineprint address-autocomplete-hint";
-  hint.textContent = "Search Florida addresses -city, state, and ZIP auto-fill when you pick a result.";
+  hint.textContent = "Search addresses within ~50 miles of Orlando - city, state, and ZIP auto-fill when you pick a result.";
   row.appendChild(hint);
 
   const list = document.createElement("ul");
@@ -96,11 +96,15 @@ export function attachAddressAutocomplete(fields, options = {}) {
   }
 
   async function search() {
-    const q = street.value.trim();
-    if (q.length < 3) {
+    const streetVal = street.value.trim();
+    if (streetVal.length < 3) {
       hideList();
       return;
     }
+
+    // Include the city/ZIP the user already typed so the geocoder gets a full
+    // address — dramatically improves matching for exact residential addresses.
+    const q = [streetVal, city.value.trim(), zip.value.trim()].filter(Boolean).join(", ");
 
     try {
       const data = await api(`${apiPath}?q=${encodeURIComponent(q)}`);
@@ -114,6 +118,15 @@ export function attachAddressAutocomplete(fields, options = {}) {
     clearPickedCoords(form);
     clearTimeout(timer);
     timer = setTimeout(search, 320);
+  });
+
+  // Refresh suggestions when the city/ZIP fields change too (they sharpen the match).
+  [city, zip].forEach((el) => {
+    el.addEventListener("input", () => {
+      if (street.value.trim().length < 3) return;
+      clearTimeout(timer);
+      timer = setTimeout(search, 400);
+    });
   });
 
   street.addEventListener("keydown", (e) => {

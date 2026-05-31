@@ -24,5 +24,8 @@ database_id = "72534135-297c-416d-a347-9b21781c36a6"
 binding = "AI"
 
 [vars]
-# Set secrets in the Cloudflare dashboard (never commit passwords):
-# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET 
+# Set secrets in the Cloudflare dashboard (never commit passwords/keys):
+#   ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET
+# Optional — enables Google Maps geocoding/autocomplete (best quality). When unset,
+# the app automatically falls back to the free US Census + OpenStreetMap geocoders:
+#   GOOGLE_MAPS_API_KEY

@@ -1,12 +1,12 @@
 import { publicCustomer, ensureCustomerCoords, sleep } from "./db.js";
 import { optimizeStopOrder, fetchDrivingRoute, DEFAULT_DEPOT } from "./routing.js";
 
-export async function buildOptimizedRoute(db, customers, depotInput = DEFAULT_DEPOT) {
+export async function buildOptimizedRoute(db, customers, depotInput = DEFAULT_DEPOT, env = null) {
   const depot = depotInput?.lat != null && depotInput?.lng != null ? depotInput : DEFAULT_DEPOT;
   const geocoded = [];
 
   for (const c of customers) {
-    const coords = await ensureCustomerCoords(db, c);
+    const coords = await ensureCustomerCoords(db, c, env);
     if (coords) {
       geocoded.push({
         ...publicCustomer({ ...c, lat: coords.lat, lng: coords.lng }),

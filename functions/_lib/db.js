@@ -164,14 +164,14 @@ export async function ensureAdminSeed(db, env) {
   }
 }
 
-export async function geocodeAndSaveCustomer(db, id, addressParts, pickedCoords = null) {
+export async function geocodeAndSaveCustomer(db, id, addressParts, pickedCoords = null, env = null) {
   if (pickedCoords && isInFlorida(pickedCoords.lat, pickedCoords.lng)) {
     await db.prepare("UPDATE customers SET lat = ?, lng = ?, updated_at = ? WHERE id = ?")
       .bind(pickedCoords.lat, pickedCoords.lng, Date.now(), id).run();
     return { ...pickedCoords, approximate: false };
   }
   try {
-    const result = await geocodeAddress(addressParts);
+    const result = await geocodeAddress(addressParts, env);
     if (result) {
       await db.prepare("UPDATE customers SET lat = ?, lng = ?, updated_at = ? WHERE id = ?")
         .bind(result.lat, result.lng, Date.now(), id).run();
@@ -182,7 +182,7 @@ export async function geocodeAndSaveCustomer(db, id, addressParts, pickedCoords 
   }
 }
 
-export async function ensureCustomerCoords(db, customerRow) {
+export async function ensureCustomerCoords(db, customerRow, env = null) {
   if (customerRow.lat != null && customerRow.lng != null && isInFlorida(customerRow.lat, customerRow.lng)) {
     return { lat: customerRow.lat, lng: customerRow.lng, approximate: false };
   }
@@ -202,7 +202,7 @@ export async function ensureCustomerCoords(db, customerRow) {
   }
   if (!street || !city || !zip) return null;
 
-  const result = await geocodeAddress({ street, city, state, zip });
+  const result = await geocodeAddress({ street, city, state, zip }, env);
   if (!result) return null;
 
   await db.prepare("UPDATE customers SET lat = ?, lng = ?, updated_at = ? WHERE id = ?")
@@ -284,14 +284,14 @@ export async function getRouteStartSetting(db) {
   };
 }
 
-export async function saveRouteStartSetting(db, parts, pickedCoords = null) {
+export async function saveRouteStartSetting(db, parts, pickedCoords = null, env = null) {
   let lat = null;
   let lng = null;
   if (pickedCoords && isInFlorida(pickedCoords.lat, pickedCoords.lng)) {
     lat = pickedCoords.lat;
     lng = pickedCoords.lng;
   } else {
-    const result = await geocodeAddress(parts);
+    const result = await geocodeAddress(parts, env);
     lat = result?.lat ?? null;
     lng = result?.lng ?? null;
   }
