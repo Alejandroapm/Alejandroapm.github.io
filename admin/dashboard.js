@@ -2,7 +2,7 @@ import { api, requireAdmin, fmtDate, esc, setStatus, formatAddress, adminPageUrl
 import { loadLeaflet, createMap, drawRoute, drawCustomers, refreshMap } from "../js/admin-maps.js";
 import { attachAddressAutocomplete, pickedCoordsPayload, clearPickedCoords } from "../js/address-autocomplete.js";
 import { t, days as i18nDays, daysShort as i18nDaysShort, dayName, adminLocale, initLangToggle, onLangChange } from "../js/admin-i18n.js";
-import { createWorkdayUI } from "../js/workday-ui.js";
+import { createWorkdayUI, workdayExportUrl, initWorkdayExportDates } from "../js/workday-ui.js";
 
 const admin = await requireAdmin();
 if (!admin) throw new Error("redirect");
@@ -17,11 +17,6 @@ if (admin.isSuper) {
   if (superLead) {
     superLead.dataset.i18n = "msgLogLeadSuper";
     superLead.textContent = t("msgLogLeadSuper");
-  }
-  const exportHint = document.getElementById("exportCsvHint");
-  if (exportHint) {
-    exportHint.dataset.i18n = "downloadCsvHintSuper";
-    exportHint.textContent = t("downloadCsvHintSuper");
   }
 } else {
   document.getElementById("addFormLeadMember")?.removeAttribute("hidden");
@@ -46,9 +41,16 @@ const workdayUI = createWorkdayUI({
   poolsLabel,
   getBusinessName: () => admin.businessName || "MSG Pool Services",
   getExportUrl: () => {
+    initWorkdayExportDates(fmtDate);
+    const to = document.getElementById("exportToDate")?.value || "";
+    const from = document.getElementById("exportFromDate")?.value?.trim() || "";
     const sel = document.getElementById("exportUserSelect");
     const uid = admin.isSuper && sel?.value ? sel.value : "";
-    return uid ? `/api/admin/workday/export.csv?userId=${encodeURIComponent(uid)}` : "/api/admin/workday/export.csv";
+    return workdayExportUrl({
+      userId: uid || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    });
   },
   els: {
     body: document.getElementById("workdayBody"),
@@ -145,6 +147,7 @@ function switchView(name) {
   if (name === "customers") loadCustomerList();
   if (name === "messages") initMessages();
   if (name === "workday") {
+    initWorkdayExportDates(fmtDate);
     if (admin.isSuper) ensureMsgLogTeamOptions();
     initWorkday();
   }

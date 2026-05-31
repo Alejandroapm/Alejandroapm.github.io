@@ -631,15 +631,13 @@
 .workday-export{
   display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 16px;
 }
-.workday-export__actions{
-  display:flex; flex-direction:column; align-items:flex-start; gap:4px;
-}
-.workday-export__hint{ margin:0; max-width:280px; line-height:1.35; }
-.workday-export__member{
+.workday-export--app{ margin-top:12px; }
+.workday-export__field{
   display:flex; flex-direction:column; gap:4px; font-size:13px;
 }
-.workday-export__member select{
-  min-width:200px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+.workday-export__field input[type="date"],
+.workday-export__field select{
+  min-width:148px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
   background:var(--surface); color:inherit; font:inherit;
 }
 .btn--danger{ color:#e11d48; border-color:color-mix(in srgb, #e11d48 40%, var(--border)); }

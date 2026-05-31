@@ -299,11 +299,34 @@ function minutesBetween(start, end) {
   return Math.max(0, Math.round((end - start) / 60000));
 }
 
+function parseExportDateParam(value) {
+  const s = String(value || "").trim();
+  if (!s) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const err = new Error("Dates must be YYYY-MM-DD.");
+    err.status = 400;
+    throw err;
+  }
+  return s;
+}
+
+function resolveExportDateRange(fromRaw, toRaw) {
+  const toDate = parseExportDateParam(toRaw) || fmtETDate(Date.now());
+  const fromDate = parseExportDateParam(fromRaw) || toDate;
+  if (fromDate > toDate) {
+    const err = new Error("From date cannot be after To date.");
+    err.status = 400;
+    throw err;
+  }
+  return { fromDate, toDate };
+}
+
 /**
- * Tax-oriented work log for the signed-in team member only (never combined across users).
+ * Tax-oriented work log for the signed-in team member (or super-selected member).
  * Returns UTF-8 CSV with a header block, detail rows, and summary totals.
+ * If from is omitted, only the to date is included.
  */
-export async function exportWorkdaysCsv(db, auth, targetUserId = null) {
+export async function exportWorkdaysCsv(db, auth, targetUserId = null, dateRange = {}) {
   let exportUserId = auth.userId;
   if (targetUserId != null) {
     if (!auth.isSuper) {
@@ -325,14 +348,18 @@ export async function exportWorkdaysCsv(db, auth, targetUserId = null) {
   const businessName = adminRow?.business_name || "";
   const memberEmail = adminRow?.email || "";
 
+  const { fromDate, toDate } = resolveExportDateRange(dateRange.fromDate, dateRange.toDate);
+
   const { results: days } = await db
-    .prepare(`SELECT * FROM work_days WHERE owner_id = ? ORDER BY started_at ASC, id ASC`)
-    .bind(exportUserId)
+    .prepare(
+      `SELECT * FROM work_days WHERE owner_id = ? AND date >= ? AND date <= ? ORDER BY started_at ASC, id ASC`
+    )
+    .bind(exportUserId, fromDate, toDate)
     .all();
 
   const generatedAt = fmtET(Date.now());
-  const periodStart = days?.length ? days[0].date : "";
-  const periodEnd = days?.length ? days[days.length - 1].date : "";
+  const periodStart = fromDate;
+  const periodEnd = toDate;
 
   let totalMiles = 0;
   let totalJobMinutes = 0;

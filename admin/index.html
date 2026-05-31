@@ -648,14 +648,19 @@
             </div>
 
             <div class="workday-export" id="workdayExportWrap">
-              <label id="exportUserWrap" class="workday-export__member" hidden>
+              <label id="exportUserWrap" class="workday-export__field" hidden>
                 <span class="muted" data-i18n="exportForMember">Export for</span>
                 <select id="exportUserSelect"></select>
               </label>
-              <div class="workday-export__actions">
-                <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
-                <p class="fineprint workday-export__hint" id="exportCsvHint" data-i18n="downloadCsvHint">One file with every work day you've logged — not just today.</p>
-              </div>
+              <label class="workday-export__field">
+                <span class="muted" data-i18n="exportFromDate">From</span>
+                <input type="date" id="exportFromDate" />
+              </label>
+              <label class="workday-export__field">
+                <span class="muted" data-i18n="exportToDate">To</span>
+                <input type="date" id="exportToDate" />
+              </label>
+              <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
             </div>
 
           </div>

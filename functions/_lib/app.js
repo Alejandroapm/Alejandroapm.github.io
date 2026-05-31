@@ -824,7 +824,12 @@ app.get("/api/admin/workday/export.csv", async (c) =>
       if (!targetUserId) return json({ error: "Invalid user id." }, 400);
     }
     try {
-      const { csv, filename } = await exportWorkdaysCsv(ctx.env.DB, auth, targetUserId);
+      const fromRaw = ctx.req.query("from");
+      const toRaw = ctx.req.query("to");
+      const { csv, filename } = await exportWorkdaysCsv(ctx.env.DB, auth, targetUserId, {
+        fromDate: fromRaw,
+        toDate: toRaw,
+      });
       return new Response(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",

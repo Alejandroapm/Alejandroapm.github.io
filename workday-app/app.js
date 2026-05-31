@@ -1,6 +1,6 @@
 import { api, setStatus, fmtDate, esc, getServerOrigin, isApiAvailable, setAuthToken, clearAuthToken } from "../js/api-client.js";
 import { t, dayName, adminLocale, onLangChange, setAdminLang, getAdminLang, applyStaticI18n } from "../js/admin-i18n.js";
-import { createWorkdayUI } from "../js/workday-ui.js";
+import { createWorkdayUI, workdayExportUrl, initWorkdayExportDates } from "../js/workday-ui.js";
 
 const REMEMBER_EMAIL_KEY = "msg_admin_saved_email";
 const REMEMBER_DEVICE_KEY = "msg_admin_remember_device";
@@ -48,6 +48,12 @@ const workdayUI = createWorkdayUI({
   adminLocale,
   poolsLabel,
   getBusinessName: () => profile.businessName,
+  getExportUrl: () => {
+    initWorkdayExportDates(fmtDate);
+    const to = document.getElementById("exportToDate")?.value || "";
+    const from = document.getElementById("exportFromDate")?.value?.trim() || "";
+    return workdayExportUrl({ from: from || undefined, to: to || undefined });
+  },
   els: {
     body: document.getElementById("workdayBody"),
     jobModal: document.getElementById("jobModal"),
@@ -76,6 +82,7 @@ function showApp(admin) {
   appScreen.hidden = false;
   profile.businessName = admin.businessName || "MSG Pool Services";
   document.getElementById("appUserEmail").textContent = admin.email;
+  initWorkdayExportDates(fmtDate);
   workdayUI.init();
 }
 

@@ -83,7 +83,17 @@
             <h1 data-i18n="wdTitle">WorkDay</h1>
             <p class="muted section__lead" data-i18n="wdLead">Run your route stop by stop, navigate, message customers, and log each job from your phone.</p>
           </div>
-          <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+          <div class="workday-export workday-export--app">
+            <label class="workday-export__field">
+              <span class="muted" data-i18n="exportFromDate">From</span>
+              <input type="date" id="exportFromDate" />
+            </label>
+            <label class="workday-export__field">
+              <span class="muted" data-i18n="exportToDate">To</span>
+              <input type="date" id="exportToDate" />
+            </label>
+            <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+          </div>
         </div>
         <div id="workdayBody"></div>
       </div>

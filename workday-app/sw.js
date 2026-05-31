@@ -1,4 +1,4 @@
-const CACHE = "workday-app-v4";
+const CACHE = "workday-app-v5";
 const SHELL = [
   "./",
   "./index.html",

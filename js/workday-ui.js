@@ -4,6 +4,23 @@
  */
 import { authFetch } from "./api-client.js";
 
+export function workdayExportUrl({ userId, from, to } = {}) {
+  const params = new URLSearchParams();
+  if (userId) params.set("userId", String(userId));
+  if (to) params.set("to", to);
+  if (from) params.set("from", from);
+  const qs = params.toString();
+  return `/api/admin/workday/export.csv${qs ? `?${qs}` : ""}`;
+}
+
+export function initWorkdayExportDates(fmtDate) {
+  const toEl = document.getElementById("exportToDate");
+  if (toEl && !toEl.value) {
+    const now = new Date();
+    toEl.value = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+}
+
 export function createWorkdayUI(deps) {
   const {
     api,
