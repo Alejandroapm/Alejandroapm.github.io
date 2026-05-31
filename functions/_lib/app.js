@@ -47,28 +47,47 @@ async function withAdmin(c, handler) {
   return handler(c, auth);
 }
 
-const LANG_NAMES = { en: "english", es: "spanish" };
+const LANG_NAMES = { en: "English", es: "Spanish" };
 
-/** Translate text using Cloudflare Workers AI, falling back to the free MyMemory API. */
-async function translateText(env, text, source, target) {
-  if (!text || source === target) return text;
+function buildRefinePrompt(targetName) {
+  return (
+    `You are a professional bilingual assistant for a residential pool and hot tub cleaning business. ` +
+    `The business owner sends you a short note, usually typed quickly in informal Spanish that may contain ` +
+    `spelling mistakes, missing accents, slang, or grammar errors. ` +
+    `Your job: understand what the owner actually means, then rewrite it as a single polished message to the customer, written in ${targetName}. ` +
+    `Fix all spelling and grammar, correct obvious typos (for example "hecho" meaning "echo"), and make the tone warm, courteous, and professional. ` +
+    `Keep every concrete detail the owner included (timing like "tomorrow" or "next week", reasons, the service such as adding double chemicals). ` +
+    `Do not invent details that were not implied, do not add greetings or signatures unless present, and keep it concise like a friendly customer text message. ` +
+    `Respond with ONLY the final ${targetName} message text — no quotes, no labels, no explanations, no alternatives.`
+  );
+}
+
+/** Clean up and translate an owner's note using a Workers AI LLM; MyMemory is a last-resort fallback. */
+async function refineMessage(env, text, target) {
+  const targetName = LANG_NAMES[target] || "English";
 
   if (env.AI && typeof env.AI.run === "function") {
     try {
-      const res = await env.AI.run("@cf/meta/m2m100-1.2b", {
-        text,
-        source_lang: LANG_NAMES[source] || source,
-        target_lang: LANG_NAMES[target] || target,
+      const res = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+        messages: [
+          { role: "system", content: buildRefinePrompt(targetName) },
+          { role: "user", content: text },
+        ],
+        max_tokens: 512,
+        temperature: 0.3,
       });
-      const out = res?.translated_text || res?.response;
-      if (out && out.trim()) return out.trim();
+      let out = (res?.response || "").trim();
+      out = out.replace(/^["'\s]+|["'\s]+$/g, "").trim();
+      if (out) return out;
     } catch {
-      // fall through to the public fallback below
+      // fall through to the fallback below
     }
   }
 
+  if (target === "es") return text;
+
   try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=es|en`;
     const r = await fetch(url, { headers: { Accept: "application/json" } });
     if (r.ok) {
       const data = await r.json();
@@ -406,16 +425,53 @@ app.post("/api/admin/translate", async (c) =>
   withAdmin(c, async (ctx) => {
     const body = await ctx.req.json();
     const text = String(body.text || "").trim();
-    const source = String(body.source || "es").toLowerCase();
-    const target = String(body.target || "en").toLowerCase();
+    const target = String(body.target || "en").toLowerCase() === "es" ? "es" : "en";
     if (!text) return json({ error: "Enter a message to translate." }, 400);
-    if (source === target) return json({ translated: text, source, target });
 
-    const translated = await translateText(ctx.env, text, source, target);
+    const translated = await refineMessage(ctx.env, text, target);
     if (translated == null) {
       return json({ error: "Translation service is unavailable right now. Try again in a moment." }, 502);
     }
-    return json({ translated, source, target });
+    return json({ translated, target });
+  })
+);
+
+const MSG_LOG_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const MSG_LOG_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+app.get("/api/admin/messages", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const cutoff = Date.now() - MSG_LOG_WINDOW_MS;
+    const { results } = await ctx.env.DB.prepare(
+      "SELECT * FROM message_logs WHERE created_at >= ? ORDER BY created_at DESC LIMIT 500"
+    ).bind(cutoff).all();
+    return json({ messages: results || [] });
+  })
+);
+
+app.post("/api/admin/messages/log", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const body = await ctx.req.json();
+    const originalText = String(body.originalText || "").trim();
+    const sentText = String(body.sentText || "").trim();
+    const language = String(body.language || "en").toLowerCase() === "es" ? "es" : "en";
+    if (!sentText) return json({ error: "Nothing to log." }, 400);
+
+    const now = Date.now();
+    await ctx.env.DB.prepare(`
+      INSERT INTO message_logs (customer_id, customer_name, phone, original_text, sent_text, language, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      body.customerId ? Number(body.customerId) : null,
+      String(body.customerName || "").trim(),
+      String(body.phone || "").trim(),
+      originalText, sentText, language, now
+    ).run();
+
+    await ctx.env.DB.prepare("DELETE FROM message_logs WHERE created_at < ?")
+      .bind(now - MSG_LOG_RETENTION_MS).run();
+
+    return json({ ok: true });
   })
 );
 

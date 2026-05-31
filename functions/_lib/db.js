@@ -112,8 +112,21 @@ export async function ensureSchema(db) {
         updated_at INTEGER NOT NULL
       )
     `),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS message_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER,
+        customer_name TEXT,
+        phone TEXT,
+        original_text TEXT NOT NULL,
+        sent_text TEXT NOT NULL,
+        language TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_customers_day ON customers(service_day_of_week)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_overrides_date ON service_overrides(date)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_message_logs_created ON message_logs(created_at)"),
   ]);
 }
 

@@ -569,6 +569,7 @@ async function initMessages() {
     const now = new Date();
     dateInput.value = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
   }
+  loadMessageLog();
   if (msgCustomersLoaded) return;
   try {
     const { customers } = await api("/api/admin/customers");
@@ -595,10 +596,51 @@ function renderMsgRecipient(c, message) {
         <p class="muted">${phone ? esc(c.phone) : "No phone on file"}</p>
       </div>
       ${smsHref
-        ? `<a class="btn btn--small" href="${smsHref}">Text</a>`
+        ? `<a class="btn btn--small" data-sms data-log-id="${c.id ?? ""}" data-log-name="${esc(c.name)}" data-log-phone="${esc(c.phone || "")}" href="${smsHref}">Text</a>`
         : `<span class="tag tag--warn">Add a phone</span>`}
     </article>
   `;
+}
+
+async function logMessage(entry) {
+  try {
+    await api("/api/admin/messages/log", { method: "POST", body: JSON.stringify(entry) });
+    loadMessageLog();
+  } catch {
+    /* logging is best-effort; never block texting */
+  }
+}
+
+function renderLogItem(m) {
+  const when = new Date(m.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  const lang = m.language === "es" ? "Spanish" : "English";
+  return `
+    <article class="msg-log__item">
+      <div class="msg-log__meta">
+        <strong>${esc(m.customer_name || "(no name)")}</strong>
+        ${m.phone ? `<span class="muted">${esc(m.phone)}</span>` : ""}
+        <span class="tag">${lang}</span>
+        <span class="muted msg-log__time">${esc(when)}</span>
+      </div>
+      <p class="msg-log__sent">${esc(m.sent_text)}</p>
+      ${m.original_text && m.original_text !== m.sent_text
+        ? `<p class="msg-log__orig muted">You wrote: ${esc(m.original_text)}</p>`
+        : ""}
+    </article>
+  `;
+}
+
+async function loadMessageLog() {
+  const list = document.getElementById("msgLogList");
+  if (!list) return;
+  try {
+    const { messages } = await api("/api/admin/messages");
+    list.innerHTML = messages.length
+      ? messages.map(renderLogItem).join("")
+      : `<p class="muted">No messages logged yet.</p>`;
+  } catch (err) {
+    list.innerHTML = `<p class="form-status--error">${esc(err.message)}</p>`;
+  }
 }
 
 async function composeMessage() {
@@ -642,20 +684,18 @@ async function composeMessage() {
   }
 
   let outgoing = text;
-  if (msgLang === "en") {
-    setStatus(statusEl, "Translating…");
-    try {
-      const { translated } = await api("/api/admin/translate", {
-        method: "POST",
-        body: JSON.stringify({ text, source: "es", target: "en" }),
-      });
-      outgoing = translated || text;
-    } catch (err) {
-      setStatus(statusEl, err.message, "error");
-      return;
-    }
-    setStatus(statusEl, "");
+  setStatus(statusEl, "Polishing message…");
+  try {
+    const { translated } = await api("/api/admin/translate", {
+      method: "POST",
+      body: JSON.stringify({ text, source: "es", target: msgLang }),
+    });
+    outgoing = translated || text;
+  } catch (err) {
+    setStatus(statusEl, err.message, "error");
+    return;
   }
+  setStatus(statusEl, "");
 
   previewText.textContent = outgoing;
   preview.hidden = false;
@@ -670,6 +710,19 @@ async function composeMessage() {
       withPhone.length < recipients.length ? ". Customers without a phone number are skipped." : "."
     }</p>
   `;
+
+  recipientsEl.querySelectorAll("a[data-sms]").forEach((a) => {
+    a.addEventListener("click", () => {
+      logMessage({
+        customerId: a.dataset.logId ? Number(a.dataset.logId) : null,
+        customerName: a.dataset.logName || "",
+        phone: a.dataset.logPhone || "",
+        originalText: text,
+        sentText: outgoing,
+        language: msgLang,
+      });
+    });
+  });
 }
 
 async function openMessagesForDate(dateStr) {
@@ -705,6 +758,7 @@ document.querySelectorAll('input[name="msgMode"]').forEach((radio) => {
 });
 
 document.getElementById("msgTranslateBtn")?.addEventListener("click", composeMessage);
+document.getElementById("msgLogRefresh")?.addEventListener("click", loadMessageLog);
 
 await Promise.all([renderCalendar(), loadStats()]);
 

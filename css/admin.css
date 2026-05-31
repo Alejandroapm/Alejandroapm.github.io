@@ -581,3 +581,15 @@
   padding:10px 14px;
 }
 .msg-recipient .btn{ flex:none; }
+.msg-log{ margin-top:28px; }
+.msg-log__item{
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+  padding:12px 14px;
+  margin-bottom:8px;
+}
+.msg-log__meta{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:6px; }
+.msg-log__time{ margin-left:auto; font-size:13px; }
+.msg-log__sent{ margin:0; white-space:pre-wrap; }
+.msg-log__orig{ margin:6px 0 0; font-size:13px; white-space:pre-wrap; }
