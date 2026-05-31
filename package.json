@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "pages:build": "npm install",
     "dev:cf": "wrangler pages dev . --d1=DB",
     "deploy:cf": "wrangler pages deploy .",
     "db:migrate:local": "wrangler d1 execute msg-pool-db --local --file=schema.sql",
