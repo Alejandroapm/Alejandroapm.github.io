@@ -621,6 +621,7 @@ function renderLogItem(m) {
         ${m.phone ? `<span class="muted">${esc(m.phone)}</span>` : ""}
         <span class="tag">${lang}</span>
         <span class="muted msg-log__time">${esc(when)}</span>
+        <button type="button" class="msg-log__del" data-del-msg="${m.id}" aria-label="Delete this message" title="Delete">✕</button>
       </div>
       <p class="msg-log__sent">${esc(m.sent_text)}</p>
       ${m.original_text && m.original_text !== m.sent_text
@@ -638,6 +639,18 @@ async function loadMessageLog() {
     list.innerHTML = messages.length
       ? messages.map(renderLogItem).join("")
       : `<p class="muted">No messages logged yet.</p>`;
+
+    list.querySelectorAll("[data-del-msg]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this message from the log?")) return;
+        try {
+          await api(`/api/admin/messages/${btn.dataset.delMsg}`, { method: "DELETE" });
+          loadMessageLog();
+        } catch (err) {
+          setStatus(document.getElementById("msgStatus"), err.message, "error");
+        }
+      });
+    });
   } catch (err) {
     list.innerHTML = `<p class="form-status--error">${esc(err.message)}</p>`;
   }

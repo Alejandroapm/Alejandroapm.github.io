@@ -475,6 +475,15 @@ app.post("/api/admin/messages/log", async (c) =>
   })
 );
 
+app.delete("/api/admin/messages/:id", async (c) =>
+  withAdmin(c, async (ctx) => {
+    const id = Number(ctx.req.param("id"));
+    if (!id) return json({ error: "Invalid message id." }, 400);
+    await ctx.env.DB.prepare("DELETE FROM message_logs WHERE id = ?").bind(id).run();
+    return json({ ok: true });
+  })
+);
+
 app.all("/api/*", () => json({ error: "Not found." }, 404));
 
 export default app;

@@ -593,3 +593,29 @@
 .msg-log__time{ margin-left:auto; font-size:13px; }
 .msg-log__sent{ margin:0; white-space:pre-wrap; }
 .msg-log__orig{ margin:6px 0 0; font-size:13px; white-space:pre-wrap; }
+.msg-log__del{
+  margin-left:8px;
+  flex:none;
+  width:28px;
+  height:28px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1;
+  cursor:pointer;
+}
+.msg-log__del:hover{ border-color:#e11d48; color:#e11d48; }
+
+/* Phone-friendly messaging layout */
+@media (max-width: 640px){
+  .msg-mode{ flex-direction:column; gap:8px; }
+  .msg-lang{ width:100%; }
+  .msg-lang .btn{ flex:1; }
+  .msg-compose .admin-form__actions .btn{ width:100%; }
+  .msg-recipient{ flex-direction:column; align-items:stretch; gap:10px; }
+  .msg-recipient .btn{ width:100%; padding:12px; font-size:16px; }
+  .msg-log__time{ margin-left:0; }
+  .msg-log__del{ margin-left:auto; }
+}
