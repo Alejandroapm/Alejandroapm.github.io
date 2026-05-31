@@ -52,7 +52,7 @@ async function fetchWithTimeout(url, options = {}) {
   } catch (err) {
     if (err.name === "AbortError") {
       throw new Error(
-        "Admin server is not responding. Make sure the Node server is running and deployed with your site."
+        "Admin server is not responding. If you use Cloudflare Pages, check that D1 and environment variables are configured (see README)."
       );
     }
     throw err;
@@ -63,9 +63,12 @@ async function fetchWithTimeout(url, options = {}) {
 
 function apiMissingMessage() {
   if (isLocalDevHost(window.location.hostname)) {
-    return `Start the server locally: open a terminal, run cd server && npm start, then visit ${getServerOrigin()}/admin/`;
+    return `Start the server locally: cd server && npm start, then open ${getServerOrigin()}/admin/ — or use Cloudflare: npm run dev:cf`;
   }
-  return "This site is hosted as static files only. Admin login requires deploying the Node server (see README — use Render, Railway, or a VPS). Uploading HTML alone is not enough.";
+  if (/github\.io$/i.test(window.location.hostname)) {
+    return "GitHub Pages is static-only and cannot run admin login. Connect this repo to Cloudflare Pages (free) — see README.";
+  }
+  return "Admin API not found. If you use Cloudflare Pages, bind the D1 database and set ADMIN_EMAIL, ADMIN_PASSWORD, and JWT_SECRET in the dashboard.";
 }
 
 export async function isApiAvailable() {

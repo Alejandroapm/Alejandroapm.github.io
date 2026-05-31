@@ -667,5 +667,9 @@ if (form) {
   const port = window.location.port;
   if (!port || staticPorts.has(port)) {
     link.href = `${window.location.protocol}//${host}:3000/admin/login.html`;
+    return;
+  }
+  if (/github\.io$/i.test(window.location.hostname)) {
+    link.title = "Admin login requires Cloudflare Pages (free), not GitHub Pages";
   }
 })();

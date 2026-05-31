@@ -70,7 +70,7 @@ form?.addEventListener("submit", async (e) => {
 
   if (!apiUp) {
     showServerNotice(
-      "<strong>Admin login is not available on this host.</strong> The public website can run on static hosting, but the admin panel needs the Node server deployed on the same domain. Deploy the <code>server/</code> folder using Render, Railway, or similar — not GitHub Pages / Netlify static-only.",
+      "<strong>Admin login is not available here.</strong> GitHub Pages and Live Server are static only. For free hosting with admin, deploy via <strong>Cloudflare Pages</strong> (see README). Locally, run <code>cd server && npm start</code> or <code>npm run dev:cf</code>.",
       true
     );
     if (submitBtn) submitBtn.disabled = true;
