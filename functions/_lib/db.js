@@ -117,19 +117,38 @@ export async function ensureSchema(db) {
   ]);
 }
 
+const BCRYPT_COST = 12;
+
+/**
+ * Keeps the admin account in sync with the ADMIN_EMAIL / ADMIN_PASSWORD env vars,
+ * which are the single source of truth. Safe to call on every request:
+ * - removes any admin row that doesn't match the configured email
+ * - creates the admin if missing
+ * - re-hashes the password only when it actually changed (no needless rehashing,
+ *   and the plaintext password is never logged or returned)
+ */
 export async function ensureAdminSeed(db, env) {
   await ensureSchema(db);
-  const adminEmail = env.ADMIN_EMAIL;
-  const adminPassword = env.ADMIN_PASSWORD;
+  const adminEmail = String(env.ADMIN_EMAIL || "").trim().toLowerCase();
+  const adminPassword = String(env.ADMIN_PASSWORD || "");
   if (!adminEmail || !adminPassword) return;
 
-  const existing = await findAdminByEmail(db, adminEmail);
-  if (existing) return;
+  await db.prepare("DELETE FROM admins WHERE lower(email) <> ?").bind(adminEmail).run();
 
-  const hash = bcrypt.hashSync(adminPassword, 12);
-  await db.prepare(`
-    INSERT INTO admins (email, password_hash, name, created_at) VALUES (?, ?, ?, ?)
-  `).bind(adminEmail.toLowerCase(), hash, "Administrator", Date.now()).run();
+  const existing = await findAdminByEmail(db, adminEmail);
+  if (!existing) {
+    const hash = bcrypt.hashSync(adminPassword, BCRYPT_COST);
+    await db.prepare(`
+      INSERT INTO admins (email, password_hash, name, created_at) VALUES (?, ?, ?, ?)
+    `).bind(adminEmail, hash, "Administrator", Date.now()).run();
+    return;
+  }
+
+  if (!bcrypt.compareSync(adminPassword, existing.password_hash)) {
+    const hash = bcrypt.hashSync(adminPassword, BCRYPT_COST);
+    await db.prepare("UPDATE admins SET password_hash = ? WHERE id = ?")
+      .bind(hash, existing.id).run();
+  }
 }
 
 export async function geocodeAndSaveCustomer(db, id, addressParts, pickedCoords = null) {
