@@ -13,4 +13,4 @@ database_id = "REPLACE_AFTER_D1_CREATE"
 
 [vars]
 # Set secrets in Cloudflare dashboard (never commit passwords):
-# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET
+# ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET 
