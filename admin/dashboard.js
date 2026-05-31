@@ -18,6 +18,13 @@ if (admin.isSuper) {
     superLead.dataset.i18n = "msgLogLeadSuper";
     superLead.textContent = t("msgLogLeadSuper");
   }
+  const exportHint = document.getElementById("exportCsvHint");
+  if (exportHint) {
+    exportHint.dataset.i18n = "downloadCsvHintSuper";
+    exportHint.textContent = t("downloadCsvHintSuper");
+  }
+} else {
+  document.getElementById("addFormLeadMember")?.removeAttribute("hidden");
 }
 
 initLangToggle();
@@ -264,7 +271,12 @@ customerForm?.addEventListener("submit", async (e) => {
 
   if (id) body.active = customerForm.active.checked;
   if (admin.isSuper) {
-    body.assignToUserId = Number(document.getElementById("customerOwner").value);
+    const ownerId = Number(document.getElementById("customerOwner").value);
+    if (!ownerId) {
+      setStatus(formStatus, t("selectRouteOperator"), "error");
+      return;
+    }
+    body.assignToUserId = ownerId;
   }
 
   try {
@@ -342,11 +354,14 @@ async function resetForm() {
   document.getElementById("state").value = "FL";
   setStatus(formStatus, "");
   const ownerRow = document.getElementById("ownerRow");
+  const ownerSel = document.getElementById("customerOwner");
   if (admin.isSuper && ownerRow) {
     await ensureTeamOwnerSelect();
+    ownerSel.required = true;
     document.getElementById("customerOwner").value = String(admin.id);
   } else if (ownerRow) {
     ownerRow.hidden = true;
+    if (ownerSel) ownerSel.required = false;
   }
 }
 
@@ -369,6 +384,7 @@ async function editCustomer(c) {
   document.getElementById("activeRow").hidden = false;
   if (admin.isSuper) {
     await ensureTeamOwnerSelect();
+    document.getElementById("customerOwner").required = true;
     document.getElementById("customerOwner").value = String(c.ownerId ?? admin.id);
   }
   window.scrollTo({ top: 0, behavior: "smooth" });

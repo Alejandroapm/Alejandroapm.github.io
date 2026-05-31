@@ -270,6 +270,8 @@
 
           <h1 id="formTitle" data-i18n="addTitle">Add customer</h1>
 
+          <p class="muted section__lead" id="addFormLeadMember" hidden data-i18n="addLeadMember">New customers are added to your route only — other team members cannot see them.</p>
+
           <form class="card admin-form" id="customerForm" autocomplete="on">
 
             <input type="hidden" id="customerId" name="customerId" value="" />
@@ -412,7 +414,7 @@
 
               <label for="customerOwner" data-i18n="fOwner">Route operator *</label>
 
-              <select id="customerOwner" name="customerOwner" required></select>
+              <select id="customerOwner" name="customerOwner"></select>
 
               <p class="fineprint" data-i18n="fOwnerHint">Which team member services this pool on their route.</p>
 
@@ -650,7 +652,10 @@
                 <span class="muted" data-i18n="exportForMember">Export for</span>
                 <select id="exportUserSelect"></select>
               </label>
-              <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+              <div class="workday-export__actions">
+                <button type="button" class="btn btn--ghost btn--small" id="exportLogBtn" data-i18n="downloadCsv">Download work log (CSV)</button>
+                <p class="fineprint workday-export__hint" id="exportCsvHint" data-i18n="downloadCsvHint">One file with every work day you've logged — not just today.</p>
+              </div>
             </div>
 
           </div>
