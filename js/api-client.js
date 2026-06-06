@@ -3,33 +3,62 @@ const STATIC_DEV_PORTS = new Set(["5500", "5501", "5502", "8080", "8888", "5173"
 const API_TIMEOUT_MS = 12000;
 const AUTH_TOKEN_KEY = "msg_admin_auth_token";
 
+/** Persist API origin after a successful login on the live host (helps WorkDay PWA). */
+export function saveApiOrigin(origin) {
+  const o = String(origin || "").trim().replace(/\/$/, "");
+  if (!o || !/^https?:\/\//i.test(o)) return;
+  try {
+    localStorage.setItem("msg_api_origin", o);
+  } catch {
+    /* private mode */
+  }
+}
+
+function readStoredApiOrigin() {
+  try {
+    const o = localStorage.getItem("msg_api_origin")?.trim().replace(/\/$/, "");
+    return o && /^https?:\/\//i.test(o) ? o : null;
+  } catch {
+    return null;
+  }
+}
+
 function readMetaApiOrigin() {
   const meta = document.querySelector('meta[name="msg-api-origin"]');
-  return meta?.content?.trim().replace(/\/$/, "") || null;
+  const content = meta?.content?.trim().replace(/\/$/, "") || "";
+  if (!content || /your-domain|your-cloudflare|example\.com/i.test(content)) return null;
+  return content;
 }
 
 function isLocalDevHost(hostname) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
-/** Origin where the Node.js API is served. */
+/** Origin where the Node.js / Cloudflare API is served. */
 export function getServerOrigin() {
   const meta = readMetaApiOrigin();
   if (meta) return meta;
 
+  const stored = readStoredApiOrigin();
+  if (stored) return stored;
+
   const { protocol, hostname, port, origin } = window.location;
 
   if (isLocalDevHost(hostname)) {
-    if (port === "3000") return origin;
+    if (port === "3000" || port === "8788") return origin;
     if (!port || STATIC_DEV_PORTS.has(port)) {
       return `${protocol}//${hostname}:3000`;
     }
   }
 
+  if (/\.github\.io$/i.test(hostname) && stored) return stored;
+
   return origin;
 }
 
-const API = getServerOrigin();
+function apiBase() {
+  return getServerOrigin();
+}
 
 /** Persist JWT for clients where HttpOnly cookies are unreliable (e.g. iPhone PWA). */
 export function getAuthToken() {
@@ -106,22 +135,29 @@ function apiMissingMessage() {
 }
 
 export async function isApiAvailable() {
-  try {
-    const res = await fetchWithTimeout(`${API}/api/health`, {
-      credentials: "include",
-      headers: authHeaders(),
-    }, API_TIMEOUT_MS);
-    return res.ok;
-  } catch {
-    return false;
+  const origins = [...new Set([apiBase(), readStoredApiOrigin()].filter(Boolean))];
+  for (const origin of origins) {
+    try {
+      const res = await fetchWithTimeout(`${origin}/api/health`, {
+        credentials: "include",
+        headers: authHeaders(),
+      }, API_TIMEOUT_MS);
+      if (res.ok) {
+        saveApiOrigin(origin);
+        return true;
+      }
+    } catch {
+      /* try next */
+    }
   }
+  return false;
 }
 
 export async function api(path, options = {}) {
   const { timeoutMs, timeoutMessage, ...fetchOptions } = options;
   let res;
   try {
-    res = await fetchWithTimeout(`${API}${path}`, {
+    res = await fetchWithTimeout(`${apiBase()}${path}`, {
       credentials: "include",
       ...fetchOptions,
       headers: authHeaders({
@@ -199,7 +235,7 @@ export async function requireAdmin() {
 /** Authenticated fetch for downloads and other non-JSON responses. */
 export async function authFetch(path, options = {}) {
   const { timeoutMs, timeoutMessage, ...fetchOptions } = options;
-  return fetchWithTimeout(`${API}${path}`, {
+  return fetchWithTimeout(`${apiBase()}${path}`, {
     credentials: "include",
     ...fetchOptions,
     headers: authHeaders(fetchOptions.headers || {}),

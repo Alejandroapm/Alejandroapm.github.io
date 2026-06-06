@@ -628,6 +628,10 @@
 }
 .msg-log__tab-count{ opacity:.65; margin-left:4px; }
 .msg-log__hint{ margin:0 0 12px; font-size:13px; }
+.customer-import{ margin-bottom:24px; }
+.customer-import h2{ margin-top:0; }
+.import-results{ margin:8px 0 0; padding-left:18px; font-size:13px; }
+.import-results li{ margin-bottom:4px; }
 .worklog-export{
   max-width:520px;
 }

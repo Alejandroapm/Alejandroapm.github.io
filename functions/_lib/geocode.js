@@ -222,3 +222,57 @@ export async function geocodeAddress({ street, city, state, zip }, env = null) {
 
   return null;
 }
+
+/** Geocode a free-form Florida address string; fills parsed fields when possible. */
+export async function geocodeOneLineAddress(text, env = null) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+
+  const query = /\bFL\b|Florida/i.test(raw) ? raw : `${raw}, FL, USA`;
+
+  for (const g of await googleGeocodeRaw(env, query)) {
+    if (withinServiceArea(g.lat, g.lng) && g.street && g.city && g.zip) {
+      return {
+        lat: g.lat,
+        lng: g.lng,
+        street: g.street,
+        city: g.city,
+        zip: g.zip,
+        label: g.label || raw,
+        approximate: false,
+      };
+    }
+    if (withinServiceArea(g.lat, g.lng)) {
+      return {
+        lat: g.lat,
+        lng: g.lng,
+        street: g.street || raw.split(",")[0]?.trim() || raw,
+        city: g.city || "",
+        zip: g.zip || "",
+        label: g.label || raw,
+        approximate: true,
+      };
+    }
+  }
+
+  const results = await safeNominatim(floridaSearchParams({ q: query, limit: "5" }));
+  const best = pickBestFloridaResult(results, raw);
+  if (!best) return null;
+  const coords = resultToCoords(best, true);
+  if (!coords) return null;
+
+  const a = best.address || {};
+  const street = [a.house_number, a.road].filter(Boolean).join(" ") || raw.split(",")[0]?.trim() || raw;
+  const city =
+    a.city || a.town || a.village || a.municipality || a.county || "";
+  const zip = String(a.postcode || "").slice(0, 5);
+
+  return {
+    ...coords,
+    street,
+    city,
+    zip,
+    label: best.display_name || raw,
+    approximate: true,
+  };
+}

@@ -34,6 +34,7 @@ import {
   bcrypt,
 } from "./auth.js";
 import { assertCustomerAccess } from "./scope.js";
+import { importCustomersFromCsv } from "./customerImport.js";
 import { suggestAddresses } from "./addressSuggest.js";
 import { buildOptimizedRoute } from "./routeBuilder.js";
 import { geocodeAddress } from "./geocode.js";
@@ -268,6 +269,31 @@ app.post("/api/admin/customers", async (c) =>
     await geocodeAndSaveCustomer(ctx.env.DB, id, addr, coordsFromBody(body), ctx.env);
     const row = await getCustomerRow(ctx.env.DB, id, auth);
     return json({ customer: publicCustomer(row) }, 201);
+  })
+);
+
+app.post("/api/admin/customers/import", async (c) =>
+  withAdmin(c, async (ctx, auth) => {
+    const body = await ctx.req.json();
+    const csv = String(body.csv || "");
+    if (!csv.trim()) return json({ error: "CSV content is required." }, 400);
+    let targetUserId = null;
+    if (body.assignToUserId != null && body.assignToUserId !== "") {
+      targetUserId = Number(body.assignToUserId);
+      if (!targetUserId) return json({ error: "Invalid team member." }, 400);
+    }
+    try {
+      const result = await importCustomersFromCsv(
+        ctx.env.DB,
+        auth,
+        csv,
+        targetUserId,
+        ctx.env
+      );
+      return json(result);
+    } catch (err) {
+      return json({ error: err.message || "Import failed." }, err.status || 400);
+    }
   })
 );
 

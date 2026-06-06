@@ -1,4 +1,4 @@
-import { api, requireAdmin, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin, clearAuthToken } from "../js/api-client.js";
+import { api, requireAdmin, fmtDate, esc, setStatus, formatAddress, adminPageUrl, getServerOrigin, clearAuthToken, saveApiOrigin } from "../js/api-client.js";
 import { loadLeaflet, createMap, drawRoute, drawCustomers, refreshMap } from "../js/admin-maps.js";
 import { attachAddressAutocomplete, pickedCoordsPayload, clearPickedCoords } from "../js/address-autocomplete.js";
 import { t, days as i18nDays, daysShort as i18nDaysShort, dayName, adminLocale, initLangToggle, onLangChange } from "../js/admin-i18n.js";
@@ -6,6 +6,7 @@ import { createWorkdayUI, workdayExportUrl, initWorkdayExportDates } from "../js
 
 const admin = await requireAdmin();
 if (!admin) throw new Error("redirect");
+saveApiOrigin(getServerOrigin());
 
 document.getElementById("adminEmail").textContent = admin.email;
 if (admin.isSuper) {
@@ -13,6 +14,7 @@ if (admin.isSuper) {
   document.getElementById("msgLogOwnerWrap")?.removeAttribute("hidden");
   document.getElementById("msgLogClearAll")?.removeAttribute("hidden");
   document.getElementById("exportUserWrap")?.removeAttribute("hidden");
+  document.getElementById("importOwnerRow")?.removeAttribute("hidden");
   const superLead = document.querySelector("#view-messages .msg-log .section__lead");
   if (superLead) {
     superLead.dataset.i18n = "msgLogLeadSuper";
@@ -71,7 +73,10 @@ async function initWorkLog() {
 }
 
 function refreshCurrentView() {
-  if (currentView === "customers") loadCustomerList();
+  if (currentView === "customers") {
+    initCustomerImport();
+    loadCustomerList();
+  }
   else if (currentView === "messages") initMessages();
   else if (currentView === "workday") renderWorkday();
   else if (currentView === "worklog") initWorkLog();
@@ -151,7 +156,10 @@ function switchView(name) {
   currentView = name;
   showView(name);
 
-  if (name === "customers") loadCustomerList();
+  if (name === "customers") {
+    initCustomerImport();
+    loadCustomerList();
+  }
   if (name === "messages") initMessages();
   if (name === "workday") initWorkday();
   if (name === "worklog") initWorkLog();
@@ -684,6 +692,76 @@ async function loadCustomerMap(force = false) {
   }
 }
 
+async function initCustomerImport() {
+  if (admin.isSuper) await ensureMsgLogTeamOptions();
+}
+
+let importCsvBound = false;
+
+function bindCustomerImport() {
+  if (importCsvBound) return;
+  importCsvBound = true;
+  document.getElementById("importCsvBtn")?.addEventListener("click", runCustomerImport);
+}
+
+async function runCustomerImport() {
+  const statusEl = document.getElementById("importCsvStatus");
+  const resultsEl = document.getElementById("importCsvResults");
+  const fileInput = document.getElementById("importCsvFile");
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    setStatus(statusEl, t("importPickFile"), "error");
+    return;
+  }
+
+  setStatus(statusEl, t("importRunning"));
+  if (resultsEl) resultsEl.hidden = true;
+
+  try {
+    const csv = await file.text();
+    const body = { csv };
+    if (admin.isSuper) {
+      const ownerId = Number(document.getElementById("importOwnerSelect")?.value);
+      if (ownerId) body.assignToUserId = ownerId;
+    }
+    const result = await api("/api/admin/customers/import", {
+      method: "POST",
+      body: JSON.stringify(body),
+      timeoutMs: 120000,
+      timeoutMessage: t("importTimeout"),
+    });
+
+    setStatus(
+      statusEl,
+      t("importDone")
+        .replace("{n}", result.imported)
+        .replace("{g}", result.geocoded),
+      "success"
+    );
+
+    if (resultsEl) {
+      const skipped = (result.skipped || [])
+        .map((s) => `<li>${t("importRow")} ${s.row}: ${esc(s.name || "")} — ${esc(s.reason)}</li>`)
+        .join("");
+      const review = (result.needsReview || [])
+        .map((s) => `<li>${esc(s.name)} — ${esc(s.reason)}</li>`)
+        .join("");
+      resultsEl.innerHTML = `
+        ${skipped ? `<p class="muted"><strong>${t("importSkipped")}</strong></p><ul class="import-results">${skipped}</ul>` : ""}
+        ${review ? `<p class="muted"><strong>${t("importReview")}</strong></p><ul class="import-results">${review}</ul>` : ""}
+      `;
+      resultsEl.hidden = !skipped && !review;
+    }
+
+    if (fileInput) fileInput.value = "";
+    await Promise.all([renderCalendar(), loadStats(), loadCustomerList()]);
+  } catch (err) {
+    setStatus(statusEl, err.message, "error");
+  }
+}
+
+bindCustomerImport();
+
 async function loadCustomerList() {
   const { customers } = await api("/api/admin/customers?all=1");
   const el = document.getElementById("customerList");
@@ -758,7 +836,7 @@ function renderTeamUser(u) {
   const statusTag = u.active
     ? `<span class="tag tag--mapped">${t("teamActive")}</span>`
     : `<span class="tag tag--skip">${t("teamRestricted")}</span>`;
-  const memberActions = u.isSuper ? "" : `
+  const memberActions = u.isSuper || u.id === admin.id ? "" : `
       ${u.active
         ? `<button type="button" class="btn btn--ghost btn--small" data-restrict-user="${u.id}">${t("teamRestrict")}</button>`
         : `<button type="button" class="btn btn--ghost btn--small" data-restore-user="${u.id}">${t("teamRestore")}</button>`}
@@ -839,10 +917,19 @@ async function loadTeamUsers() {
 
     el.querySelectorAll("[data-delete-user]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        const userId = Number(btn.dataset.deleteUser);
+        if (userId === admin.id) {
+          alert(t("teamDeleteSelf"));
+          return;
+        }
         if (!confirm(t("teamDeleteConfirm"))) return;
-        await api(`/api/admin/users/${btn.dataset.deleteUser}`, { method: "DELETE" });
-        teamOwnerOptionsLoaded = false;
-        loadTeamUsers();
+        try {
+          await api(`/api/admin/users/${userId}`, { method: "DELETE" });
+          teamOwnerOptionsLoaded = false;
+          loadTeamUsers();
+        } catch (err) {
+          alert(err.message);
+        }
       });
     });
   } catch (err) {
@@ -952,8 +1039,10 @@ async function ensureMsgLogTeamOptions() {
     }
     const ownerSel = document.getElementById("msgLogOwnerFilter");
     const exportSel = document.getElementById("exportUserSelect");
+    const importSel = document.getElementById("importOwnerSelect");
     const keepOwner = ownerSel?.value || "";
     const keepExport = exportSel?.value || "";
+    const keepImport = importSel?.value || "";
     const memberOpts = teamUsersCache
       .map((u) => `<option value="${u.id}">${esc(u.name || u.email)}</option>`)
       .join("");
@@ -963,7 +1052,11 @@ async function ensureMsgLogTeamOptions() {
     }
     if (exportSel) {
       exportSel.innerHTML = memberOpts;
-      exportSel.value = keepExport || String(admin.userId);
+      exportSel.value = keepExport || String(admin.id);
+    }
+    if (importSel) {
+      importSel.innerHTML = memberOpts;
+      importSel.value = keepImport || String(admin.id);
     }
   } catch {
     /* filters stay empty until refresh */

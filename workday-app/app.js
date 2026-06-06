@@ -1,4 +1,4 @@
-import { api, setStatus, fmtDate, esc, getServerOrigin, isApiAvailable, setAuthToken, clearAuthToken } from "../js/api-client.js";
+import { api, setStatus, fmtDate, esc, getServerOrigin, isApiAvailable, setAuthToken, clearAuthToken, saveApiOrigin } from "../js/api-client.js";
 import { t, dayName, adminLocale, onLangChange, setAdminLang, getAdminLang, applyStaticI18n } from "../js/admin-i18n.js";
 import { createWorkdayUI, workdayExportUrl, initWorkdayExportDates } from "../js/workday-ui.js";
 
@@ -120,6 +120,7 @@ loginForm?.addEventListener("submit", async (e) => {
       body: JSON.stringify({ email, password, rememberDevice }),
     });
     if (data.token) setAuthToken(data.token, rememberDevice || true);
+    saveApiOrigin(getServerOrigin());
     loginForm.password.value = "";
 
     if (rememberDevice) {
@@ -152,11 +153,9 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   if (!apiUp) {
     setStatus(
       loginStatus,
-      "Admin login is not available here. Open WorkDay from your Cloudflare admin site (not GitHub Pages). See Install WorkDay in the admin dashboard.",
+      t("apiUnavailableHint"),
       "error"
     );
-    if (loginSubmitBtn) loginSubmitBtn.disabled = true;
-    return;
   }
 
   try {

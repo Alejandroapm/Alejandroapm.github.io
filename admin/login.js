@@ -1,4 +1,4 @@
-import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer, isApiAvailable, setAuthToken, clearAuthToken } from "../js/api-client.js";
+import { api, setStatus, getServerOrigin, adminPageUrl, isStaticDevServer, isApiAvailable, setAuthToken, clearAuthToken, saveApiOrigin } from "../js/api-client.js";
 import { t, initLangToggle } from "../js/admin-i18n.js";
 
 initLangToggle();
@@ -51,6 +51,7 @@ form?.addEventListener("submit", async (e) => {
       body: JSON.stringify({ email, password, rememberDevice }),
     });
     if (data.token) setAuthToken(data.token, rememberDevice);
+    saveApiOrigin(getServerOrigin());
 
     form.password.value = "";
 
@@ -74,11 +75,9 @@ form?.addEventListener("submit", async (e) => {
 
   if (!apiUp) {
     showServerNotice(
-      "<strong>Admin login is not available here.</strong> GitHub Pages and Live Server are static only. For free hosting with admin, deploy via <strong>Cloudflare Pages</strong> (see README). Locally, run <code>cd server && npm start</code> or <code>npm run dev:cf</code>.",
+      `<strong>${t("apiUnavailableTitle")}</strong> ${t("apiUnavailableHint")}`,
       true
     );
-    if (submitBtn) submitBtn.disabled = true;
-    return;
   }
 
   try {
@@ -88,6 +87,7 @@ form?.addEventListener("submit", async (e) => {
     if (err.message?.includes("Please sign in") || err.message?.includes("Session expired")) {
       return;
     }
+    if (!apiUp) return;
     setStatus(statusEl, err.message, "error");
   }
 })();

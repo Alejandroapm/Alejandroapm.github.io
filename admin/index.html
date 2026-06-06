@@ -260,6 +260,24 @@
 
           <p class="muted section__lead" data-i18n="custLead">Manage your pool list, service days, and private notes.</p>
 
+          <div class="card customer-import" id="customerImportCard">
+            <h2 data-i18n="importTitle">Import customers (CSV)</h2>
+            <p class="muted section__lead" data-i18n="importLead">Upload a route spreadsheet with day, name, address, phone, notes, and optional cost columns.</p>
+            <div class="form-row" id="importOwnerRow" hidden>
+              <label for="importOwnerSelect" data-i18n="importForMember">Import for</label>
+              <select id="importOwnerSelect"></select>
+            </div>
+            <div class="form-row">
+              <label for="importCsvFile" data-i18n="importFile">CSV file</label>
+              <input type="file" id="importCsvFile" accept=".csv,text/csv" />
+            </div>
+            <div class="admin-form__actions">
+              <button type="button" class="btn btn--small" id="importCsvBtn" data-i18n="importRun">Import</button>
+            </div>
+            <p class="fineprint form-status" id="importCsvStatus" aria-live="polite"></p>
+            <div id="importCsvResults" hidden></div>
+          </div>
+
           <div id="customerList" class="customer-list"></div>
 
         </section>
