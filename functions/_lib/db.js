@@ -221,34 +221,62 @@ async function addColumn(db, table, column, definition) {
   }
 }
 
+async function tableExists(db, table) {
+  const row = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .bind(table)
+    .first();
+  return !!row;
+}
+
 /** Migrate route_stop_orders from calendar date to day-of-week templates. */
 async function migrateRouteOrdersDayOfWeek(db) {
+  if (!(await tableExists(db, "route_stop_orders"))) return;
   const hasDate = await columnExists(db, "route_stop_orders", "date");
   if (!hasDate) return;
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS route_stop_orders_dow (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      owner_id INTEGER NOT NULL,
-      day_of_week INTEGER NOT NULL,
-      customer_id INTEGER NOT NULL,
-      seq INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-      UNIQUE(owner_id, day_of_week, customer_id)
-    )
-  `).run();
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS route_stop_orders_dow (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        day_of_week INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        UNIQUE(owner_id, day_of_week, customer_id)
+      )
+    `).run();
 
-  await db.prepare(`
-    INSERT OR REPLACE INTO route_stop_orders_dow (owner_id, day_of_week, customer_id, seq, updated_at)
-    SELECT owner_id, CAST(strftime('%w', date) AS INTEGER), customer_id, seq, updated_at
-    FROM route_stop_orders
-    ORDER BY updated_at ASC
-  `).run();
+    await db.prepare(`
+      INSERT OR REPLACE INTO route_stop_orders_dow (owner_id, day_of_week, customer_id, seq, updated_at)
+      SELECT owner_id, CAST(strftime('%w', date) AS INTEGER), customer_id, seq, updated_at
+      FROM route_stop_orders
+      WHERE date IS NOT NULL
+      ORDER BY updated_at ASC
+    `).run();
 
-  await db.prepare("DROP TABLE route_stop_orders").run();
-  await db.prepare("ALTER TABLE route_stop_orders_dow RENAME TO route_stop_orders").run();
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
+    await db.prepare("DROP TABLE route_stop_orders").run();
+    await db.prepare("ALTER TABLE route_stop_orders_dow RENAME TO route_stop_orders").run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
+  } catch {
+    try { await db.prepare("DROP TABLE IF EXISTS route_stop_orders_dow").run(); } catch { /* ignore */ }
+    try { await db.prepare("DROP TABLE IF EXISTS route_stop_orders").run(); } catch { /* ignore */ }
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS route_stop_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        day_of_week INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        UNIQUE(owner_id, day_of_week, customer_id)
+      )
+    `).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
+  }
 }
 
 /** End duplicate active work days so the per-owner unique index can be created. */
@@ -333,26 +361,36 @@ const BCRYPT_COST = 12;
 export async function ensureAdminSeed(db, env) {
   await ensureSchema(db);
   await runMigrations(db, env);
-  const adminEmail = String(env.ADMIN_EMAIL || "").trim().toLowerCase();
-  const adminPassword = String(env.ADMIN_PASSWORD || "");
+  const adminEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
+  const adminPassword = String(env?.ADMIN_PASSWORD || "");
   if (!adminEmail || !adminPassword) return;
 
-  const existing = await findAdminByEmail(db, adminEmail);
-  if (!existing) {
+  try {
+    const existing = await findAdminByEmail(db, adminEmail);
+    if (!existing) {
+      const hash = bcrypt.hashSync(adminPassword, BCRYPT_COST);
+      await db.prepare(`
+        INSERT INTO admins (email, password_hash, name, role, active, created_at)
+        VALUES (?, ?, ?, 'super', 1, ?)
+      `).bind(adminEmail, hash, "Super Admin", Date.now()).run();
+      return;
+    }
+
+    const passwordMatches = bcrypt.compareSync(adminPassword, existing.password_hash);
+    if (passwordMatches) {
+      if (existing.role !== "super" || !existing.active) {
+        await db.prepare("UPDATE admins SET role = 'super', active = 1 WHERE id = ?").bind(existing.id).run();
+      }
+      return;
+    }
+
     const hash = bcrypt.hashSync(adminPassword, BCRYPT_COST);
     await db.prepare(`
-      INSERT INTO admins (email, password_hash, name, role, active, created_at)
-      VALUES (?, ?, ?, 'super', 1, ?)
-    `).bind(adminEmail, hash, "Super Admin", Date.now()).run();
-    return;
+      UPDATE admins SET password_hash = ?, role = 'super', active = 1 WHERE id = ?
+    `).bind(hash, existing.id).run();
+  } catch (err) {
+    throw new Error(`Admin account setup failed: ${err.message || err}`);
   }
-
-  const hash = bcrypt.compareSync(adminPassword, existing.password_hash)
-    ? existing.password_hash
-    : bcrypt.hashSync(adminPassword, BCRYPT_COST);
-  await db.prepare(`
-    UPDATE admins SET password_hash = ?, role = 'super', active = 1 WHERE id = ?
-  `).bind(hash, existing.id).run();
 }
 
 export async function geocodeAndSaveCustomer(db, id, addressParts, pickedCoords = null, env = null) {

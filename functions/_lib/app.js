@@ -162,36 +162,57 @@ async function refineMessage(env, text, target) {
 }
 
 app.get("/api/health", async (c) => {
-  await ensureAdminSeed(c.env.DB, c.env);
-  return json({ ok: true });
+  try {
+    if (!c.env.DB) return json({ ok: false, error: "Database not configured." }, 503);
+    await c.env.DB.prepare("SELECT 1 AS ok").first();
+    return json({ ok: true });
+  } catch {
+    return json({ ok: false, error: "Database unavailable." }, 503);
+  }
 });
 
 app.post("/api/auth/login", async (c) => {
-  await ensureAdminSeed(c.env.DB, c.env);
-  const body = await c.req.json();
-  const email = String(body.email || "").trim().toLowerCase();
-  const password = String(body.password || "");
-  const rememberDevice = !!body.rememberDevice;
+  try {
+    if (!c.env.JWT_SECRET) {
+      return json({ error: "Server misconfigured: set JWT_SECRET in Cloudflare (Settings → Variables)." }, 503);
+    }
+    if (!c.env.ADMIN_EMAIL || !c.env.ADMIN_PASSWORD) {
+      return json({ error: "Server misconfigured: set ADMIN_EMAIL and ADMIN_PASSWORD in Cloudflare." }, 503);
+    }
 
-  const admin = await findAdminByEmail(c.env.DB, email);
-  if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
-    return json({ error: "Invalid email or password." }, 401);
-  }
-  if (!admin.active) {
-    return json({ error: "Account access has been restricted." }, 403);
-  }
+    await ensureAdminSeed(c.env.DB, c.env);
+    const body = await c.req.json();
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    const rememberDevice = !!body.rememberDevice;
 
-  const token = await signToken(c.env, {
-    id: admin.id,
-    email: admin.email,
-    role: admin.role || "user",
-  }, rememberDevice);
-  const secure = new URL(c.req.url).protocol === "https:";
-  return json(
-    { ok: true, admin: publicAdmin(admin), token },
-    200,
-    { "Set-Cookie": setAuthCookie(token, rememberDevice, secure) }
-  );
+    const admin = await findAdminByEmail(c.env.DB, email);
+    if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
+      return json({ error: "Invalid email or password." }, 401);
+    }
+    if (!admin.active) {
+      return json({ error: "Account access has been restricted." }, 403);
+    }
+
+    const token = await signToken(c.env, {
+      id: admin.id,
+      email: admin.email,
+      role: admin.role || "user",
+    }, rememberDevice);
+    const secure = new URL(c.req.url).protocol === "https:";
+    return json(
+      { ok: true, admin: publicAdmin(admin), token },
+      200,
+      { "Set-Cookie": setAuthCookie(token, rememberDevice, secure) }
+    );
+  } catch (err) {
+    console.error("Login failed:", err);
+    const msg = String(err?.message || err || "");
+    if (msg.includes("JWT_SECRET")) {
+      return json({ error: "Server misconfigured: set JWT_SECRET in Cloudflare (Settings → Variables)." }, 503);
+    }
+    return json({ error: msg || "Login failed. Please try again." }, 500);
+  }
 });
 
 app.post("/api/auth/logout", (c) => {
