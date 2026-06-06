@@ -762,8 +762,8 @@ async function loadRoute(dayOfWeek, { rebuild = false } = {}) {
     const mappedTxt = route.stops?.length
       ? ` · ${route.stops.length} ${route.stops.length === 1 ? t("mappedStop") : t("mappedStops")}`
       : "";
-    const orderNote = route.saved ? t("routeSaved") : (rebuild ? t("optimizedFrom") : t("routeManualOrder"));
-    const saveHint = route.saved && !rebuild ? "" : ` ${t("routeDragHint")}`;
+    const orderNote = route.saved ? t("routeSaved") : t("optimizedFrom");
+    const saveHint = ` ${t("routeDragHint")}`;
 
     meta.innerHTML = `
       <h2 class="route-panel__title">${localDay}</h2>
