@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import {
   findAdminByEmail,
   findAdminById,
@@ -55,11 +54,72 @@ import { milesBetween } from "./florida.js";
 
 const app = new Hono();
 
-app.use("/api/*", cors({
-  origin: (origin) => origin || "*",
-  credentials: true,
-  allowHeaders: ["Content-Type", "Authorization"],
-}));
+const CORS_ALLOW_HEADERS = "Content-Type, Authorization";
+const CORS_ALLOW_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+
+function configuredCorsOrigins(env) {
+  return String(env?.ADMIN_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((o) => o.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+}
+
+function isLocalOrigin(origin) {
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
+function allowedCorsOrigin(c) {
+  const origin = c.req.header("Origin")?.replace(/\/$/, "");
+  if (!origin) return null;
+
+  const self = new URL(c.req.url);
+  const selfOrigin = `${self.protocol}//${self.host}`;
+  if (origin === selfOrigin) return origin;
+  if (configuredCorsOrigins(c.env).includes(origin)) return origin;
+
+  if (["localhost", "127.0.0.1", "[::1]"].includes(self.hostname) && isLocalOrigin(origin)) {
+    return origin;
+  }
+
+  return null;
+}
+
+function appendVaryOrigin(headers) {
+  const vary = headers.get("Vary");
+  if (!vary) {
+    headers.set("Vary", "Origin");
+  } else if (!vary.split(",").map((v) => v.trim().toLowerCase()).includes("origin")) {
+    headers.set("Vary", `${vary}, Origin`);
+  }
+}
+
+function setCorsHeaders(headers, origin) {
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.set("Access-Control-Allow-Headers", CORS_ALLOW_HEADERS);
+  headers.set("Access-Control-Allow-Methods", CORS_ALLOW_METHODS);
+  headers.set("Access-Control-Max-Age", "86400");
+  appendVaryOrigin(headers);
+}
+
+app.use("/api/*", async (c, next) => {
+  const origin = allowedCorsOrigin(c);
+
+  if (c.req.method === "OPTIONS") {
+    if (!origin) return new Response(null, { status: 403 });
+    const headers = new Headers();
+    setCorsHeaders(headers, origin);
+    return new Response(null, { status: 204, headers });
+  }
+
+  await next();
+  if (origin) setCorsHeaders(c.res.headers, origin);
+});
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {

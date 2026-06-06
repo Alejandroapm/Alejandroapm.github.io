@@ -179,8 +179,9 @@ export async function logNavigate(db, workDayId, auth, stopId = null, coords = n
   const w = await assertWorkdayAccess(db, workDayId, auth);
   if (!w) return null;
   const stop = stopId
-    ? await db.prepare("SELECT customer_id FROM work_stops WHERE id = ?").bind(stopId).first()
+    ? await db.prepare("SELECT customer_id FROM work_stops WHERE id = ? AND work_day_id = ?").bind(stopId, workDayId).first()
     : null;
+  if (stopId && !stop) return null;
   await logEvent(db, workDayId, { type: "navigate", stopId: stopId || null, customerId: stop?.customer_id ?? null, coords });
   return getWorkdayById(db, workDayId);
 }
@@ -257,7 +258,8 @@ export async function endWorkday(db, workDayId, auth, coords = null) {
 
 function csvEscape(v) {
   const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function fmtET(ts) {

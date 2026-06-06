@@ -1,3 +1,3 @@
 ADMIN_EMAIL=admin@msgpoolservices.com
-ADMIN_PASSWORD=change-me
-JWT_SECRET=use-a-long-random-string-here
+ADMIN_PASSWORD=replace-with-a-strong-unique-password
+JWT_SECRET=replace-with-at-least-32-random-characters

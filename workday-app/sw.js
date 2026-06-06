@@ -11,6 +11,7 @@ const SHELL = [
   "../js/admin-i18n.js",
   "../js/workday-ui.js",
   "./app.js",
+  "./install.js",
 ];
 
 self.addEventListener("install", (event) => {
