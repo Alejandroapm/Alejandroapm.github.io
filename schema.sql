@@ -117,3 +117,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_work_days_one_active_per_owner
   ON work_days(owner_id) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id);
 CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id);
+
+CREATE TABLE IF NOT EXISTS route_stop_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  customer_id INTEGER NOT NULL,
+  seq INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+  UNIQUE(owner_id, date, customer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_date ON route_stop_orders(owner_id, date);

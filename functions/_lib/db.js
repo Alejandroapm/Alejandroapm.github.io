@@ -192,7 +192,19 @@ export async function ensureSchema(db) {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_message_logs_created ON message_logs(created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_days_status ON work_days(status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id)"),
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_work_events_day ON work_events(work_day_id)"),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS route_stop_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        customer_id INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        UNIQUE(owner_id, date, customer_id)
+      )
+    `),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_date ON route_stop_orders(owner_id, date)"),
   ]);
   await runMigrations(db, null);
   schemaInitialized = true;
@@ -251,6 +263,20 @@ export async function runMigrations(db, env) {
   } catch {
     // Existing duplicates or a partial index conflict must not block login.
   }
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS route_stop_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      customer_id INTEGER NOT NULL,
+      seq INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+      UNIQUE(owner_id, date, customer_id)
+    )
+  `).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_date ON route_stop_orders(owner_id, date)").run();
 
   const superEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
   if (superEmail) {
@@ -358,11 +384,25 @@ export async function getActiveCustomers(db, auth) {
 }
 
 export async function customersForDate(db, dateStr, auth) {
+  return customersForDateForOwner(db, dateStr, auth.isSuper ? null : auth.userId, auth);
+}
+
+export async function customersForDateForOwner(db, dateStr, ownerId, auth = null) {
   const d = new Date(`${dateStr}T12:00:00`);
   if (Number.isNaN(d.getTime())) return [];
 
   const dow = d.getDay();
-  const customers = await getActiveCustomers(db, auth);
+  let customers;
+  if (ownerId != null) {
+    const { results } = await db
+      .prepare("SELECT * FROM customers WHERE active = 1 AND owner_id = ? ORDER BY name ASC")
+      .bind(ownerId)
+      .all();
+    customers = results || [];
+  } else {
+    customers = await getActiveCustomers(db, auth);
+  }
+
   const customerIds = new Set(customers.map((c) => c.id));
   const { results: overrides } = await db.prepare("SELECT * FROM service_overrides WHERE date = ?").bind(dateStr).all();
   const list = (overrides || []).filter((o) => customerIds.has(o.customer_id));
@@ -563,7 +603,7 @@ export async function updateTeamUser(db, id, { name, email, businessName, passwo
   }
   if (businessName !== undefined) {
     const biz = String(businessName || "").trim();
-    if (!biz) throw new Error("Business name is required.");
+    if (!biz && user.role !== "super") throw new Error("Business name is required.");
     fields.push("business_name = ?");
     binds.push(biz);
   }
@@ -593,17 +633,29 @@ export async function updateTeamUser(db, id, { name, email, businessName, passwo
 export async function deleteTeamUser(db, id) {
   const user = await findAdminById(db, id);
   if (!user) return false;
-  if (user.role === "super") throw new Error("Cannot delete the super account.");
 
-  const superRow = await db
-    .prepare("SELECT id FROM admins WHERE role = 'super' ORDER BY id ASC LIMIT 1")
-    .first();
-  if (!superRow) throw new Error("No super account found to reassign data.");
+  let reassignId;
+  if (user.role === "super") {
+    const countRow = await db.prepare("SELECT COUNT(*) AS n FROM admins WHERE role = 'super'").first();
+    if ((countRow?.n || 0) <= 1) throw new Error("Cannot delete the only super account.");
+    const other = await db
+      .prepare("SELECT id FROM admins WHERE role = 'super' AND id != ? ORDER BY id ASC LIMIT 1")
+      .bind(id)
+      .first();
+    reassignId = other.id;
+  } else {
+    const superRow = await db
+      .prepare("SELECT id FROM admins WHERE role = 'super' ORDER BY id ASC LIMIT 1")
+      .first();
+    if (!superRow) throw new Error("No super account found to reassign data.");
+    reassignId = superRow.id;
+  }
 
   await db.batch([
-    db.prepare("UPDATE customers SET owner_id = ? WHERE owner_id = ?").bind(superRow.id, id),
-    db.prepare("UPDATE work_days SET owner_id = ? WHERE owner_id = ?").bind(superRow.id, id),
-    db.prepare("UPDATE message_logs SET owner_id = ? WHERE owner_id = ?").bind(superRow.id, id),
+    db.prepare("UPDATE customers SET owner_id = ? WHERE owner_id = ?").bind(reassignId, id),
+    db.prepare("UPDATE work_days SET owner_id = ? WHERE owner_id = ?").bind(reassignId, id),
+    db.prepare("UPDATE message_logs SET owner_id = ? WHERE owner_id = ?").bind(reassignId, id),
+    db.prepare("DELETE FROM route_stop_orders WHERE owner_id = ?").bind(id),
     db.prepare("DELETE FROM admins WHERE id = ?").bind(id),
   ]);
   return true;

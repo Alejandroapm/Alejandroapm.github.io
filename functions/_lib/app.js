@@ -11,6 +11,7 @@ import {
   ensureSchema,
   ensureAdminSeed,
   customersForDate,
+  customersForDateForOwner,
   calendarSummary,
   DAY_NAMES,
   getRouteStartSetting,
@@ -26,6 +27,7 @@ import {
   deleteTeamUser,
   sleep,
 } from "./db.js";
+import { buildRouteForOwner, saveRouteOrder } from "./routeOrders.js";
 import {
   signToken,
   setAuthCookie,
@@ -36,7 +38,6 @@ import {
 import { assertCustomerAccess } from "./scope.js";
 import { importCustomersFromCsv } from "./customerImport.js";
 import { suggestAddresses } from "./addressSuggest.js";
-import { buildOptimizedRoute } from "./routeBuilder.js";
 import { geocodeAddress } from "./geocode.js";
 import {
   startWorkday,
@@ -412,21 +413,56 @@ app.get("/api/admin/route", async (c) =>
       return json({ error: "Provide date as YYYY-MM-DD." }, 400);
     }
     const d = new Date(`${date}T12:00:00`);
-    const scheduled = await customersForDate(ctx.env.DB, date, auth);
-
-    if (!scheduled.length) {
-      return json({
-        date, dayName: DAY_NAMES[d.getDay()], scheduledCount: 0,
-        depot: await getRouteDepot(ctx.env.DB, auth.userId), stops: [], unmapped: [],
-        geometry: null, distanceMiles: null, durationMinutes: null,
-      });
-    }
+    const ownerId = auth.isSuper && ctx.req.query("ownerId")
+      ? Number(ctx.req.query("ownerId"))
+      : auth.userId;
     try {
-      const depot = await getRouteDepot(ctx.env.DB, auth.userId);
-      const route = await buildOptimizedRoute(ctx.env.DB, scheduled, depot, ctx.env);
-      return json({ date, dayName: DAY_NAMES[d.getDay()], scheduledCount: scheduled.length, ...route });
+      const route = await buildRouteForOwner(ctx.env.DB, ctx.env, date, ownerId);
+      const scheduled = await customersForDateForOwner(ctx.env.DB, date, ownerId, auth);
+      return json({
+        date,
+        dayName: DAY_NAMES[d.getDay()],
+        ownerId,
+        scheduledCount: scheduled.length,
+        ...route,
+      });
     } catch {
       return json({ error: "Could not build optimized route." }, 500);
+    }
+  })
+);
+
+app.put("/api/admin/route/order", async (c) =>
+  withAdmin(c, async (ctx, auth) => {
+    const body = await ctx.req.json();
+    const date = String(body.date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return json({ error: "Provide date as YYYY-MM-DD." }, 400);
+    }
+    const ownerId = auth.isSuper && body.ownerId != null ? Number(body.ownerId) : auth.userId;
+    const customerIds = [...new Set((body.customerIds || []).map(Number).filter(Boolean))];
+    const scheduled = await customersForDateForOwner(ctx.env.DB, date, ownerId, auth);
+    const scheduledIds = new Set(scheduled.map((c) => c.id));
+    if (customerIds.some((id) => !scheduledIds.has(id))) {
+      return json({ error: "Invalid stop order." }, 400);
+    }
+    const mappedIds = scheduled.filter((c) => c.lat != null && c.lng != null).map((c) => c.id);
+    if (customerIds.length !== mappedIds.length || !mappedIds.every((id) => customerIds.includes(id))) {
+      return json({ error: "Order must include every mapped stop for this day." }, 400);
+    }
+    try {
+      await saveRouteOrder(ctx.env.DB, ownerId, date, customerIds);
+      const route = await buildRouteForOwner(ctx.env.DB, ctx.env, date, ownerId);
+      const d = new Date(`${date}T12:00:00`);
+      return json({
+        date,
+        dayName: DAY_NAMES[d.getDay()],
+        ownerId,
+        scheduledCount: scheduled.length,
+        ...route,
+      });
+    } catch {
+      return json({ error: "Could not save route order." }, 500);
     }
   })
 );

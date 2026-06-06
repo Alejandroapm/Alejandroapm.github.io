@@ -15,6 +15,7 @@ if (admin.isSuper) {
   document.getElementById("msgLogClearAll")?.removeAttribute("hidden");
   document.getElementById("exportUserWrap")?.removeAttribute("hidden");
   document.getElementById("importOwnerRow")?.removeAttribute("hidden");
+  document.getElementById("routeOwnerRow")?.removeAttribute("hidden");
   const superLead = document.querySelector("#view-messages .msg-log .section__lead");
   if (superLead) {
     superLead.dataset.i18n = "msgLogLeadSuper";
@@ -236,6 +237,75 @@ async function suggestBestDay() {
 }
 
 document.getElementById("loadRouteBtn")?.addEventListener("click", () => loadRoute(routeDateInput.value));
+document.getElementById("routeOwnerSelect")?.addEventListener("change", () => {
+  if (routeDateInput.value) loadRoute(routeDateInput.value);
+});
+
+function currentRouteOwnerId() {
+  if (admin.isSuper) {
+    const sel = document.getElementById("routeOwnerSelect");
+    return Number(sel?.value || admin.id);
+  }
+  return admin.id;
+}
+
+function routeApiQuery(dateStr) {
+  const q = new URLSearchParams({ date: dateStr });
+  if (admin.isSuper) q.set("ownerId", String(currentRouteOwnerId()));
+  return q.toString();
+}
+
+function bindRouteStopDrag(listEl, dateStr) {
+  if (!listEl) return;
+  let dragItem = null;
+
+  listEl.querySelectorAll(".route-stop[draggable]").forEach((item) => {
+    item.addEventListener("dragstart", (e) => {
+      dragItem = item;
+      item.classList.add("route-stop--dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    item.addEventListener("dragend", () => {
+      item.classList.remove("route-stop--dragging");
+      dragItem = null;
+    });
+    item.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!dragItem || dragItem === item) return;
+      const rect = item.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      listEl.insertBefore(dragItem, after ? item.nextSibling : item);
+    });
+    item.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      await saveRouteOrderFromList(listEl, dateStr);
+    });
+  });
+}
+
+async function saveRouteOrderFromList(listEl, dateStr) {
+  const customerIds = [...listEl.querySelectorAll(".route-stop[data-customer-id]")].map(
+    (li) => Number(li.dataset.customerId)
+  );
+  listEl.querySelectorAll(".route-stop__num").forEach((el, i) => {
+    el.textContent = String(i + 1);
+  });
+
+  const body = { date: dateStr, customerIds };
+  if (admin.isSuper) body.ownerId = currentRouteOwnerId();
+  try {
+    const route = await api("/api/admin/route/order", {
+      method: "PUT",
+      body: JSON.stringify(body),
+      timeoutMs: 120000,
+    });
+    drawRoute(routeMap, routeLayer, route);
+    await refreshMap(routeMap);
+  } catch (err) {
+    alert(err.message);
+    loadRoute(dateStr);
+  }
+}
 document.getElementById("refreshMapBtn")?.addEventListener("click", () => loadCustomerMap());
 document.getElementById("relocateAllBtn")?.addEventListener("click", () => {
   if (!confirm(t("relocateConfirm"))) return;
@@ -599,11 +669,12 @@ async function loadRoute(dateStr) {
   warnings.hidden = true;
 
   showView("route");
+  if (admin.isSuper) await ensureMsgLogTeamOptions();
   await loadRouteStartForm();
   await ensureRouteMap();
 
   try {
-    const route = await api(`/api/admin/route?date=${dateStr}`, { timeoutMs: 120000 });
+    const route = await api(`/api/admin/route?${routeApiQuery(dateStr)}`, { timeoutMs: 120000 });
     const d = new Date(`${dateStr}T12:00:00`);
     const localDay = dayName(d.getDay());
     const scheduledCount = route.scheduledCount ?? route.stops?.length ?? 0;
@@ -623,16 +694,18 @@ async function loadRoute(dateStr) {
     const mappedTxt = route.stops?.length
       ? ` · ${route.stops.length} ${route.stops.length === 1 ? t("mappedStop") : t("mappedStops")}`
       : "";
+    const orderNote = route.manualOrder ? t("routeManualOrder") : t("optimizedFrom");
 
     meta.innerHTML = `
       <h2 class="route-panel__title">${localDay}, ${d.toLocaleDateString(adminLocale(), { month: "long", day: "numeric", year: "numeric" })}</h2>
       <p class="route-panel__stats">${poolsLabel(scheduledCount)} ${t("scheduled")}${mappedTxt}${stats.length ? ` · ${stats.join(" · ")}` : ""}</p>
-      <p class="fineprint">${t("optimizedFrom")} ${startLabel}.</p>
+      <p class="fineprint">${orderNote} ${startLabel}. ${t("routeDragHint")}</p>
     `;
 
     if (route.stops?.length) {
       list.innerHTML = route.stops.map((stop) => `
-        <li class="route-stop">
+        <li class="route-stop" draggable="true" data-customer-id="${stop.id}">
+          <span class="route-stop__drag" aria-hidden="true" title="${esc(t("routeDragHint"))}">⋮⋮</span>
           <span class="route-stop__num">${stop.order}</span>
           <div>
             <strong>${esc(stop.name)}</strong>
@@ -642,6 +715,7 @@ async function loadRoute(dateStr) {
           </div>
         </li>
       `).join("");
+      bindRouteStopDrag(list, dateStr);
     } else {
       list.innerHTML = `<li class="muted">${t("poolsScheduledNone")}</li>`;
     }
@@ -836,10 +910,13 @@ function renderTeamUser(u) {
   const statusTag = u.active
     ? `<span class="tag tag--mapped">${t("teamActive")}</span>`
     : `<span class="tag tag--skip">${t("teamRestricted")}</span>`;
-  const memberActions = u.isSuper || u.id === admin.id ? "" : `
-      ${u.active
-        ? `<button type="button" class="btn btn--ghost btn--small" data-restrict-user="${u.id}">${t("teamRestrict")}</button>`
-        : `<button type="button" class="btn btn--ghost btn--small" data-restore-user="${u.id}">${t("teamRestore")}</button>`}
+  const isSelf = Number(u.id) === Number(admin.id);
+  const memberActions = isSelf ? "" : `
+      ${!u.isSuper
+        ? (u.active
+          ? `<button type="button" class="btn btn--ghost btn--small" data-restrict-user="${u.id}">${t("teamRestrict")}</button>`
+          : `<button type="button" class="btn btn--ghost btn--small" data-restore-user="${u.id}">${t("teamRestore")}</button>`)
+        : ""}
       <button type="button" class="btn btn--ghost btn--small" data-reset-pwd="${u.id}">${t("teamResetPwd")}</button>
       <button type="button" class="btn btn--ghost btn--small btn--danger" data-delete-user="${u.id}">${t("teamDelete")}</button>`;
   return `
@@ -973,6 +1050,8 @@ function openTeamEditModal(userId) {
   teamEditForm.email.value = u.email || "";
   teamEditForm.businessName.value = u.businessName || "";
   teamEditForm.password.value = "";
+  const bizInput = document.getElementById("teamEditBusiness");
+  if (bizInput) bizInput.required = !u.isSuper;
   setStatus(teamEditStatus, "");
   teamEditModal.showModal();
 }
@@ -1040,9 +1119,11 @@ async function ensureMsgLogTeamOptions() {
     const ownerSel = document.getElementById("msgLogOwnerFilter");
     const exportSel = document.getElementById("exportUserSelect");
     const importSel = document.getElementById("importOwnerSelect");
+    const routeSel = document.getElementById("routeOwnerSelect");
     const keepOwner = ownerSel?.value || "";
     const keepExport = exportSel?.value || "";
     const keepImport = importSel?.value || "";
+    const keepRoute = routeSel?.value || "";
     const memberOpts = teamUsersCache
       .map((u) => `<option value="${u.id}">${esc(u.name || u.email)}</option>`)
       .join("");
@@ -1057,6 +1138,10 @@ async function ensureMsgLogTeamOptions() {
     if (importSel) {
       importSel.innerHTML = memberOpts;
       importSel.value = keepImport || String(admin.id);
+    }
+    if (routeSel) {
+      routeSel.innerHTML = memberOpts;
+      routeSel.value = keepRoute || String(admin.id);
     }
   } catch {
     /* filters stay empty until refresh */

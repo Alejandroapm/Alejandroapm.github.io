@@ -221,6 +221,13 @@
   color:var(--muted);
 }
 #dayModalBody{ padding:16px 20px 20px; max-height:70vh; overflow:auto; }
+.day-modal__body{
+  padding:16px 20px 20px;
+  margin:0;
+}
+.day-modal__body .admin-form__actions{
+  margin-top:8px;
+}
 
 .day-list{ display:flex; flex-direction:column; gap:12px; }
 .day-customer{
@@ -264,16 +271,18 @@
 /* Customer list */
 .customer-list{ display:flex; flex-direction:column; gap:12px; }
 .customer-row{
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  gap:12px 16px;
+  align-items:start;
   background:#fff;
   border:1px solid var(--line);
   border-radius:12px;
   padding:14px;
   box-shadow:var(--shadow);
 }
+.customer-row > div:first-child{ min-width:0; }
+.customer-row > div:first-child strong{ word-break:break-word; }
 .customer-row--inactive{ opacity:.65; }
 .customer-row__notes{
   font-size:14px;
@@ -283,8 +292,16 @@
 }
 .customer-row__actions{
   display:flex;
+  flex-wrap:wrap;
   gap:6px;
   align-items:flex-start;
+  justify-content:flex-end;
+}
+@media (max-width:640px){
+  .customer-row{
+    grid-template-columns:1fr;
+  }
+  .customer-row__actions{ justify-content:flex-start; }
 }
 
 .form-status--success{ color:#0d7a3e; font-weight:700; }
@@ -423,6 +440,19 @@
   border:1px solid var(--line);
   border-radius:10px;
   background:var(--alt);
+  cursor:grab;
+}
+.route-stop--dragging{
+  opacity:.65;
+  border-color:var(--brand);
+}
+.route-stop__drag{
+  flex-shrink:0;
+  color:var(--muted);
+  font-size:14px;
+  line-height:28px;
+  user-select:none;
+  cursor:grab;
 }
 .route-stop__num{
   flex-shrink:0;
@@ -831,9 +861,12 @@
 .tag--super{ background:rgba(11,95,255,.15); color:var(--brand); font-weight:700; }
 .team-user-list{ display:flex; flex-direction:column; gap:12px; margin-top:16px; }
 .team-user-row{
-  display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  gap:12px 16px;
+  align-items:start;
 }
+.team-user-row > div:first-child{ min-width:0; }
 .team-user-row--restricted{ opacity:.75; }
 .team-user-row__actions{ display:flex; flex-wrap:wrap; gap:8px; }
 .team-add-form__actions{ display:flex; align-items:flex-end; }
