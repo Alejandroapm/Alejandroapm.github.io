@@ -1,7 +1,7 @@
 import { milesBetween } from "./florida.js";
 import { buildOptimizedRoute } from "./routeBuilder.js";
 import { customersForDateForOwner, getRouteDepot, DAY_NAMES, findAdminById } from "./db.js";
-import { applySavedStopOrder, getSavedRouteOrder } from "./routeOrders.js";
+import { getSavedRouteOrder, orderStopsForWorkday } from "./routeOrders.js";
 import { assertWorkdayAccess } from "./scope.js";
 
 function publicStop(s) {
@@ -113,14 +113,16 @@ export async function startWorkday(db, env, dateStr, auth, coords = null) {
 
   const scheduled = await customersForDateForOwner(db, dateStr, auth.userId, auth);
   const notesById = new Map(scheduled.map((c) => [c.id, c.notes || ""]));
+  const scheduledIds = new Set(scheduled.map((c) => c.id));
+  const dow = new Date(`${dateStr}T12:00:00`).getDay();
 
   let ordered = [];
   let unmapped = [];
   if (scheduled.length) {
     const depot = await getRouteDepot(db, auth.userId);
     const route = await buildOptimizedRoute(db, scheduled, depot, env, { geocode: false, driving: false });
-    const saved = await getSavedRouteOrder(db, auth.userId, dateStr);
-    ordered = applySavedStopOrder(route.stops || [], saved);
+    const saved = await getSavedRouteOrder(db, auth.userId, dow);
+    ordered = orderStopsForWorkday(route.stops || [], saved, scheduledIds);
     unmapped = route.unmapped || [];
   }
 

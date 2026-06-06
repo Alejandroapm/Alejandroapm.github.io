@@ -196,15 +196,15 @@ export async function ensureSchema(db) {
       CREATE TABLE IF NOT EXISTS route_stop_orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         owner_id INTEGER NOT NULL,
-        date TEXT NOT NULL,
+        day_of_week INTEGER NOT NULL,
         customer_id INTEGER NOT NULL,
         seq INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-        UNIQUE(owner_id, date, customer_id)
+        UNIQUE(owner_id, day_of_week, customer_id)
       )
     `),
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_date ON route_stop_orders(owner_id, date)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)"),
   ]);
   await runMigrations(db, null);
   schemaInitialized = true;
@@ -219,6 +219,36 @@ async function addColumn(db, table, column, definition) {
   if (!(await columnExists(db, table, column))) {
     await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
   }
+}
+
+/** Migrate route_stop_orders from calendar date to day-of-week templates. */
+async function migrateRouteOrdersDayOfWeek(db) {
+  const hasDate = await columnExists(db, "route_stop_orders", "date");
+  if (!hasDate) return;
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS route_stop_orders_dow (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      customer_id INTEGER NOT NULL,
+      seq INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+      UNIQUE(owner_id, day_of_week, customer_id)
+    )
+  `).run();
+
+  await db.prepare(`
+    INSERT OR REPLACE INTO route_stop_orders_dow (owner_id, day_of_week, customer_id, seq, updated_at)
+    SELECT owner_id, CAST(strftime('%w', date) AS INTEGER), customer_id, seq, updated_at
+    FROM route_stop_orders
+    ORDER BY updated_at ASC
+  `).run();
+
+  await db.prepare("DROP TABLE route_stop_orders").run();
+  await db.prepare("ALTER TABLE route_stop_orders_dow RENAME TO route_stop_orders").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
 }
 
 /** End duplicate active work days so the per-owner unique index can be created. */
@@ -268,15 +298,16 @@ export async function runMigrations(db, env) {
     CREATE TABLE IF NOT EXISTS route_stop_orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       owner_id INTEGER NOT NULL,
-      date TEXT NOT NULL,
+      day_of_week INTEGER NOT NULL,
       customer_id INTEGER NOT NULL,
       seq INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-      UNIQUE(owner_id, date, customer_id)
+      UNIQUE(owner_id, day_of_week, customer_id)
     )
   `).run();
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_date ON route_stop_orders(owner_id, date)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
+  await migrateRouteOrdersDayOfWeek(db);
 
   const superEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
   if (superEmail) {
@@ -423,6 +454,21 @@ export async function customersForDateForOwner(db, dateStr, ownerId, auth = null
     ...publicCustomer(c),
     overrides: list.filter((o) => o.customer_id === c.id).map((o) => ({ type: o.type, note: o.note || "" })),
   }));
+}
+
+/** Regular weekly schedule for one owner (no calendar skip/extra overrides). */
+export async function customersForDayOfWeekForOwner(db, dayOfWeek, ownerId) {
+  const dow = Number(dayOfWeek);
+  if (dow < 0 || dow > 6 || ownerId == null) return [];
+
+  const { results } = await db
+    .prepare(
+      "SELECT * FROM customers WHERE active = 1 AND owner_id = ? AND service_day_of_week = ? ORDER BY name ASC"
+    )
+    .bind(ownerId, dow)
+    .all();
+
+  return (results || []).map(publicCustomer);
 }
 
 function countCustomersForDate(customers, overridesForDate, dateStr) {

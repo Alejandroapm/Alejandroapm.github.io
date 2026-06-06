@@ -83,7 +83,7 @@ function refreshCurrentView() {
   else if (currentView === "worklog") initWorkLog();
   else if (currentView === "map") loadCustomerMap();
   else if (currentView === "team") loadTeamUsers();
-  else if (currentView === "route" && routeDateInput.value) loadRoute(routeDateInput.value);
+  else if (currentView === "route" && routeDaySelect?.value != null) loadRoute(Number(routeDaySelect.value));
 }
 
 function ownerBadge(c) {
@@ -98,6 +98,14 @@ let teamOwnerOptionsLoaded = false;
 onLangChange(() => {
   loadStats();
   renderCalendar();
+  if (routeDaySelect) {
+    const keep = routeDaySelect.value;
+    routeDaySelect.innerHTML = "";
+    i18nDays().forEach((name, i) => {
+      routeDaySelect.innerHTML += `<option value="${i}">${esc(name)}</option>`;
+    });
+    routeDaySelect.value = keep;
+  }
   refreshCurrentView();
 });
 
@@ -127,8 +135,20 @@ const customerForm = document.getElementById("customerForm");
 const formStatus = document.getElementById("formStatus");
 const dayModal = document.getElementById("dayModal");
 
-const routeDateInput = document.getElementById("routeDate");
-routeDateInput.value = fmtDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+const routeDaySelect = document.getElementById("routeDayOfWeek");
+const saveRouteBtn = document.getElementById("saveRouteBtn");
+let lastRouteData = null;
+let routeDirty = false;
+
+function initRouteDaySelect() {
+  if (!routeDaySelect || routeDaySelect.options.length) return;
+  i18nDays().forEach((name, i) => {
+    routeDaySelect.innerHTML += `<option value="${i}">${esc(name)}</option>`;
+  });
+  routeDaySelect.value = String(new Date().getDay());
+}
+
+initRouteDaySelect();
 
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   try {
@@ -166,7 +186,11 @@ function switchView(name) {
   if (name === "worklog") initWorkLog();
   if (name === "add") resetForm();
   if (name === "route") {
-    loadRouteStartForm().then(() => ensureRouteMap());
+    loadRouteStartForm().then(() =>
+      ensureRouteMap().then(() => {
+        if (routeDaySelect?.value != null) loadRoute(Number(routeDaySelect.value));
+      })
+    );
   }
   if (name === "map") {
     ensureCustomerMap().then(() => loadCustomerMap());
@@ -236,9 +260,18 @@ async function suggestBestDay() {
   }
 }
 
-document.getElementById("loadRouteBtn")?.addEventListener("click", () => loadRoute(routeDateInput.value));
+document.getElementById("loadRouteBtn")?.addEventListener("click", () => {
+  loadRoute(Number(routeDaySelect.value), { rebuild: true });
+});
+document.getElementById("saveRouteBtn")?.addEventListener("click", () => {
+  const list = document.getElementById("routeStopList");
+  saveRouteOrderFromList(list, Number(routeDaySelect.value));
+});
+routeDaySelect?.addEventListener("change", () => {
+  loadRoute(Number(routeDaySelect.value));
+});
 document.getElementById("routeOwnerSelect")?.addEventListener("change", () => {
-  if (routeDateInput.value) loadRoute(routeDateInput.value);
+  loadRoute(Number(routeDaySelect.value));
 });
 
 function currentRouteOwnerId() {
@@ -249,13 +282,36 @@ function currentRouteOwnerId() {
   return admin.id;
 }
 
-function routeApiQuery(dateStr) {
-  const q = new URLSearchParams({ date: dateStr });
+function routeApiQuery(dayOfWeek, rebuild = false) {
+  const q = new URLSearchParams({ dayOfWeek: String(dayOfWeek) });
+  if (rebuild) q.set("rebuild", "1");
   if (admin.isSuper) q.set("ownerId", String(currentRouteOwnerId()));
   return q.toString();
 }
 
-function bindRouteStopDrag(listEl, dateStr) {
+function renumberRouteList(listEl) {
+  listEl.querySelectorAll(".route-stop__num").forEach((el, i) => {
+    el.textContent = String(i + 1);
+  });
+}
+
+function routePreviewFromList(listEl) {
+  if (!lastRouteData?.depot) return null;
+  const byId = new Map((lastRouteData.stops || []).map((s) => [s.id, s]));
+  const stops = [...listEl.querySelectorAll(".route-stop[data-customer-id]")].map((li, i) => {
+    const id = Number(li.dataset.customerId);
+    const prev = byId.get(id) || {};
+    return { ...prev, id, order: i + 1 };
+  });
+  return { ...lastRouteData, stops };
+}
+
+function setRouteDirty(dirty) {
+  routeDirty = dirty;
+  if (saveRouteBtn) saveRouteBtn.hidden = !dirty;
+}
+
+function bindRouteStopDrag(listEl) {
   if (!listEl) return;
   let dragItem = null;
 
@@ -278,20 +334,24 @@ function bindRouteStopDrag(listEl, dateStr) {
     });
     item.addEventListener("drop", async (e) => {
       e.preventDefault();
-      await saveRouteOrderFromList(listEl, dateStr);
+      renumberRouteList(listEl);
+      lastRouteData = routePreviewFromList(listEl);
+      if (lastRouteData) {
+        drawRoute(routeMap, routeLayer, lastRouteData);
+        await refreshMap(routeMap);
+      }
+      setRouteDirty(true);
     });
   });
 }
 
-async function saveRouteOrderFromList(listEl, dateStr) {
+async function saveRouteOrderFromList(listEl, dayOfWeek) {
   const customerIds = [...listEl.querySelectorAll(".route-stop[data-customer-id]")].map(
     (li) => Number(li.dataset.customerId)
   );
-  listEl.querySelectorAll(".route-stop__num").forEach((el, i) => {
-    el.textContent = String(i + 1);
-  });
+  renumberRouteList(listEl);
 
-  const body = { date: dateStr, customerIds };
+  const body = { dayOfWeek, customerIds };
   if (admin.isSuper) body.ownerId = currentRouteOwnerId();
   try {
     const route = await api("/api/admin/route/order", {
@@ -299,11 +359,18 @@ async function saveRouteOrderFromList(listEl, dateStr) {
       body: JSON.stringify(body),
       timeoutMs: 120000,
     });
+    lastRouteData = route;
     drawRoute(routeMap, routeLayer, route);
     await refreshMap(routeMap);
+    setRouteDirty(false);
+    const statusEl = document.getElementById("routeSaveStatus");
+    if (statusEl) {
+      setStatus(statusEl, t("routeSavedOk"), "success");
+      setTimeout(() => setStatus(statusEl, ""), 3000);
+    }
   } catch (err) {
     alert(err.message);
-    loadRoute(dateStr);
+    loadRoute(dayOfWeek);
   }
 }
 document.getElementById("refreshMapBtn")?.addEventListener("click", () => loadCustomerMap());
@@ -330,7 +397,7 @@ document.getElementById("routeStartForm")?.addEventListener("submit", async (e) 
     });
     clearPickedCoords(form);
     setStatus(statusEl, t("startAddrSaved"), "success");
-    if (routeDateInput.value) loadRoute(routeDateInput.value);
+    if (routeDaySelect?.value != null) loadRoute(Number(routeDaySelect.value));
   } catch (err) {
     setStatus(statusEl, err.message, "error");
   }
@@ -560,7 +627,7 @@ async function openDayModal(dateStr) {
 
   body.querySelector("[data-route-date]")?.addEventListener("click", async () => {
     dayModal.close();
-    routeDateInput.value = dateStr;
+    routeDaySelect.value = String(new Date(`${dateStr}T12:00:00`).getDay());
     document.querySelector('[data-view="route"]').click();
   });
 
@@ -657,8 +724,8 @@ function bindExtraForm(dateStr) {
   });
 }
 
-async function loadRoute(dateStr) {
-  if (!dateStr) return;
+async function loadRoute(dayOfWeek, { rebuild = false } = {}) {
+  if (dayOfWeek == null || Number.isNaN(dayOfWeek)) return;
 
   const meta = document.getElementById("routeMeta");
   const list = document.getElementById("routeStopList");
@@ -667,6 +734,7 @@ async function loadRoute(dateStr) {
   meta.innerHTML = `<p class="muted">${t("buildingRoute")}</p>`;
   list.innerHTML = "";
   warnings.hidden = true;
+  setRouteDirty(false);
 
   showView("route");
   if (admin.isSuper) await ensureMsgLogTeamOptions();
@@ -674,13 +742,13 @@ async function loadRoute(dateStr) {
   await ensureRouteMap();
 
   try {
-    const route = await api(`/api/admin/route?${routeApiQuery(dateStr)}`, { timeoutMs: 120000 });
-    const d = new Date(`${dateStr}T12:00:00`);
-    const localDay = dayName(d.getDay());
+    const route = await api(`/api/admin/route?${routeApiQuery(dayOfWeek, rebuild)}`, { timeoutMs: 120000 });
+    lastRouteData = route;
+    const localDay = dayName(dayOfWeek);
     const scheduledCount = route.scheduledCount ?? route.stops?.length ?? 0;
 
     if (!scheduledCount) {
-      meta.innerHTML = `<p class="muted"><strong>${localDay}</strong> -${t("noPoolsDate")}</p>`;
+      meta.innerHTML = `<p class="muted"><strong>${localDay}</strong> — ${t("noPoolsDate")}</p>`;
       drawRoute(routeMap, routeLayer, { depot: route.depot, stops: [], geometry: null });
       await refreshMap(routeMap);
       return;
@@ -694,12 +762,14 @@ async function loadRoute(dateStr) {
     const mappedTxt = route.stops?.length
       ? ` · ${route.stops.length} ${route.stops.length === 1 ? t("mappedStop") : t("mappedStops")}`
       : "";
-    const orderNote = route.manualOrder ? t("routeManualOrder") : t("optimizedFrom");
+    const orderNote = route.saved ? t("routeSaved") : (rebuild ? t("optimizedFrom") : t("routeManualOrder"));
+    const saveHint = route.saved && !rebuild ? "" : ` ${t("routeDragHint")}`;
 
     meta.innerHTML = `
-      <h2 class="route-panel__title">${localDay}, ${d.toLocaleDateString(adminLocale(), { month: "long", day: "numeric", year: "numeric" })}</h2>
+      <h2 class="route-panel__title">${localDay}</h2>
       <p class="route-panel__stats">${poolsLabel(scheduledCount)} ${t("scheduled")}${mappedTxt}${stats.length ? ` · ${stats.join(" · ")}` : ""}</p>
-      <p class="fineprint">${orderNote} ${startLabel}. ${t("routeDragHint")}</p>
+      <p class="fineprint">${orderNote} ${startLabel}.${saveHint}</p>
+      <p class="fineprint form-status" id="routeSaveStatus" aria-live="polite"></p>
     `;
 
     if (route.stops?.length) {
@@ -715,7 +785,8 @@ async function loadRoute(dateStr) {
           </div>
         </li>
       `).join("");
-      bindRouteStopDrag(list, dateStr);
+      bindRouteStopDrag(list);
+      if (!route.saved) setRouteDirty(true);
     } else {
       list.innerHTML = `<li class="muted">${t("poolsScheduledNone")}</li>`;
     }

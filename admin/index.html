@@ -140,7 +140,7 @@
 
               <h1 data-i18n="routeTitle">Route planner</h1>
 
-              <p class="muted section__lead" data-i18n="routeLead">Optimized stop order for the most efficient pool route each day.</p>
+              <p class="muted section__lead" data-i18n="routeLead">Plan and save a weekly route for each service day. WorkDay uses the saved order.</p>
 
             </div>
 
@@ -156,13 +156,15 @@
 
               <label class="route-date-label">
 
-                <span class="sr-only" data-i18n="serviceDate">Service date</span>
+                <span data-i18n="routeServiceDay">Service day</span>
 
-                <input type="date" id="routeDate" />
+                <select id="routeDayOfWeek"></select>
 
               </label>
 
               <button type="button" class="btn btn--small" id="loadRouteBtn" data-i18n="buildRoute">Build route</button>
+
+              <button type="button" class="btn btn--small btn--ghost" id="saveRouteBtn" data-i18n="saveRoute" hidden>Save route</button>
 
             </div>
 
@@ -202,7 +204,7 @@
 
               <div class="route-panel__meta" id="routeMeta">
 
-                <p class="muted" data-i18n="routeMetaDefault">Pick a date and build the route to see stops in order.</p>
+                <p class="muted" data-i18n="routeMetaDefault">Pick a service day and build the route to see stops in order.</p>
 
               </div>
 

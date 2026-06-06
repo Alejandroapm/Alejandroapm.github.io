@@ -12,6 +12,7 @@ import {
   ensureAdminSeed,
   customersForDate,
   customersForDateForOwner,
+  customersForDayOfWeekForOwner,
   calendarSummary,
   DAY_NAMES,
   getRouteStartSetting,
@@ -27,7 +28,7 @@ import {
   deleteTeamUser,
   sleep,
 } from "./db.js";
-import { buildRouteForOwner, saveRouteOrder } from "./routeOrders.js";
+import { buildRouteForDayOfWeek, saveRouteOrder } from "./routeOrders.js";
 import {
   signToken,
   setAuthCookie,
@@ -408,26 +409,30 @@ app.get("/api/admin/day", async (c) =>
 
 app.get("/api/admin/route", async (c) =>
   withAdmin(c, async (ctx, auth) => {
-    const date = String(ctx.req.query("date") || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return json({ error: "Provide date as YYYY-MM-DD." }, 400);
+    const dayOfWeek = ctx.req.query("dayOfWeek");
+    if (dayOfWeek == null || dayOfWeek === "") {
+      return json({ error: "Provide dayOfWeek (0=Sunday … 6=Saturday)." }, 400);
     }
-    const d = new Date(`${date}T12:00:00`);
+    const dow = Number(dayOfWeek);
+    if (dow < 0 || dow > 6) return json({ error: "dayOfWeek must be 0–6." }, 400);
+
     const ownerId = auth.isSuper && ctx.req.query("ownerId")
       ? Number(ctx.req.query("ownerId"))
       : auth.userId;
+    const rebuild = ctx.req.query("rebuild") === "1";
+
     try {
-      const route = await buildRouteForOwner(ctx.env.DB, ctx.env, date, ownerId);
-      const scheduled = await customersForDateForOwner(ctx.env.DB, date, ownerId, auth);
+      const route = await buildRouteForDayOfWeek(ctx.env.DB, ctx.env, dow, ownerId, { rebuild });
+      const scheduled = await customersForDayOfWeekForOwner(ctx.env.DB, dow, ownerId);
       return json({
-        date,
-        dayName: DAY_NAMES[d.getDay()],
+        dayOfWeek: dow,
+        dayName: DAY_NAMES[dow],
         ownerId,
         scheduledCount: scheduled.length,
         ...route,
       });
     } catch {
-      return json({ error: "Could not build optimized route." }, 500);
+      return json({ error: "Could not build route." }, 500);
     }
   })
 );
@@ -435,13 +440,13 @@ app.get("/api/admin/route", async (c) =>
 app.put("/api/admin/route/order", async (c) =>
   withAdmin(c, async (ctx, auth) => {
     const body = await ctx.req.json();
-    const date = String(body.date || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return json({ error: "Provide date as YYYY-MM-DD." }, 400);
+    const dow = Number(body.dayOfWeek);
+    if (dow < 0 || dow > 6) {
+      return json({ error: "Provide dayOfWeek (0=Sunday … 6=Saturday)." }, 400);
     }
     const ownerId = auth.isSuper && body.ownerId != null ? Number(body.ownerId) : auth.userId;
     const customerIds = [...new Set((body.customerIds || []).map(Number).filter(Boolean))];
-    const scheduled = await customersForDateForOwner(ctx.env.DB, date, ownerId, auth);
+    const scheduled = await customersForDayOfWeekForOwner(ctx.env.DB, dow, ownerId);
     const scheduledIds = new Set(scheduled.map((c) => c.id));
     if (customerIds.some((id) => !scheduledIds.has(id))) {
       return json({ error: "Invalid stop order." }, 400);
@@ -451,12 +456,11 @@ app.put("/api/admin/route/order", async (c) =>
       return json({ error: "Order must include every mapped stop for this day." }, 400);
     }
     try {
-      await saveRouteOrder(ctx.env.DB, ownerId, date, customerIds);
-      const route = await buildRouteForOwner(ctx.env.DB, ctx.env, date, ownerId);
-      const d = new Date(`${date}T12:00:00`);
+      await saveRouteOrder(ctx.env.DB, ownerId, dow, customerIds);
+      const route = await buildRouteForDayOfWeek(ctx.env.DB, ctx.env, dow, ownerId);
       return json({
-        date,
-        dayName: DAY_NAMES[d.getDay()],
+        dayOfWeek: dow,
+        dayName: DAY_NAMES[dow],
         ownerId,
         scheduledCount: scheduled.length,
         ...route,
