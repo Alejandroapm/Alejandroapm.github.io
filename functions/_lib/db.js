@@ -192,19 +192,6 @@ export async function ensureSchema(db) {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_message_logs_created ON message_logs(created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_days_status ON work_days(status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_work_stops_day ON work_stops(work_day_id)"),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS route_stop_orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        day_of_week INTEGER NOT NULL,
-        customer_id INTEGER NOT NULL,
-        seq INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-        UNIQUE(owner_id, day_of_week, customer_id)
-      )
-    `),
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)"),
   ]);
   await runMigrations(db, null);
   schemaInitialized = true;
@@ -233,7 +220,8 @@ async function tableExists(db, table) {
 async function migrateRouteOrdersDayOfWeek(db) {
   if (!(await tableExists(db, "route_stop_orders"))) return;
   const hasDate = await columnExists(db, "route_stop_orders", "date");
-  if (!hasDate) return;
+  const hasDow = await columnExists(db, "route_stop_orders", "day_of_week");
+  if (!hasDate || hasDow) return;
 
   try {
     await db.prepare(`
@@ -259,23 +247,46 @@ async function migrateRouteOrdersDayOfWeek(db) {
 
     await db.prepare("DROP TABLE route_stop_orders").run();
     await db.prepare("ALTER TABLE route_stop_orders_dow RENAME TO route_stop_orders").run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
   } catch {
     try { await db.prepare("DROP TABLE IF EXISTS route_stop_orders_dow").run(); } catch { /* ignore */ }
     try { await db.prepare("DROP TABLE IF EXISTS route_stop_orders").run(); } catch { /* ignore */ }
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS route_stop_orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        day_of_week INTEGER NOT NULL,
-        customer_id INTEGER NOT NULL,
-        seq INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-        UNIQUE(owner_id, day_of_week, customer_id)
-      )
-    `).run();
+    await createRouteStopOrdersTable(db);
+  }
+}
+
+async function createRouteStopOrdersTable(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS route_stop_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      customer_id INTEGER NOT NULL,
+      seq INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+      UNIQUE(owner_id, day_of_week, customer_id)
+    )
+  `).run();
+}
+
+/** Ensures route_stop_orders uses day_of_week (migrates legacy date column first). */
+async function ensureRouteStopOrdersTable(db) {
+  if (!(await tableExists(db, "route_stop_orders"))) {
+    await createRouteStopOrdersTable(db);
+  } else {
+    const hasDow = await columnExists(db, "route_stop_orders", "day_of_week");
+    if (!hasDow) {
+      await migrateRouteOrdersDayOfWeek(db);
+    }
+    if (!(await columnExists(db, "route_stop_orders", "day_of_week"))) {
+      try { await db.prepare("DROP TABLE IF EXISTS route_stop_orders").run(); } catch { /* ignore */ }
+      await createRouteStopOrdersTable(db);
+    }
+  }
+  try {
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
+  } catch {
+    /* index may already exist under another name */
   }
 }
 
@@ -322,20 +333,7 @@ export async function runMigrations(db, env) {
     // Existing duplicates or a partial index conflict must not block login.
   }
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS route_stop_orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      owner_id INTEGER NOT NULL,
-      day_of_week INTEGER NOT NULL,
-      customer_id INTEGER NOT NULL,
-      seq INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-      UNIQUE(owner_id, day_of_week, customer_id)
-    )
-  `).run();
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_route_stop_orders_owner_dow ON route_stop_orders(owner_id, day_of_week)").run();
-  await migrateRouteOrdersDayOfWeek(db);
+  await ensureRouteStopOrdersTable(db);
 
   const superEmail = String(env?.ADMIN_EMAIL || "").trim().toLowerCase();
   if (superEmail) {
