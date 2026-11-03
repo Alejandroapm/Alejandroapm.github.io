@@ -1,0 +1,33 @@
+name: Build Mi Asistente Beta
+on:
+  push:
+    branches:
+      - chatgpt/mi-asistente
+    paths:
+      - 'mi-asistente/**'
+      - '.github/workflows/build-mi-asistente.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install Cherri compiler
+        run: |
+          brew tap electrikmilk/cherri
+          brew install electrikmilk/cherri/cherri
+      - name: Compile and sign for iOS
+        working-directory: mi-asistente
+        run: |
+          cherri MiAsistenteBeta.cherri
+          test -s MiAsistenteBeta.shortcut
+          file MiAsistenteBeta.shortcut
+      - name: Upload installable shortcut
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiAsistenteBeta
+          path: mi-asistente/MiAsistenteBeta.shortcut
+          if-no-files-found: error
