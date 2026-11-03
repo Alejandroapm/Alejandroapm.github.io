@@ -1,0 +1,45 @@
+/* Mi Asistente - beta experimental para iPhone
+   Este atajo no controla el sistema completo. No importa contactos ni claves.
+   Para invocarlo di "Hey Siri, Mi Asistente Beta".
+   Asegúrate de revisar el destinatario cuando haya nombres ambiguos.
+*/
+#include 'actions/text'
+#include 'actions/contacts'
+#include 'actions/device'
+#include 'actions/sharing'
+
+#define glyph personSpeech
+#define color purple
+
+const dictado = listen("After Pause", "es-ES")
+const orden = lowercase(dictado)
+
+if containsText(orden, "llama", false) {
+    const nombre = trimWhitespace(replaceText('^.*(?:llama|llamar)\\s+(?:a\\s+)?', "", orden, false, true))
+    if nombre == "" {
+        show("Dime a quién quieres llamar.")
+    } else {
+        const contactos = search(nombre, 5, [Contacts])
+        const cantidad = count(contactos)
+        if cantidad == 1 {
+            const persona = getFirstItem(contactos)
+            call(persona)
+        } else {
+            show("No encontré un contacto único para: {nombre}. No hice ninguna llamada.")
+        }
+    }
+} else if containsText(orden, "abre", false) {
+    if containsText(orden, "calculadora", false) {
+        openApp("com.apple.calculator")
+    } else if containsText(orden, "safari", false) {
+        openApp("com.apple.mobilesafari")
+    } else if containsText(orden, "mapas", false) {
+        openApp("com.apple.Maps")
+    } else if containsText(orden, "configuración", false) {
+        openApp("com.apple.Preferences")
+    } else {
+        show("Todavía no sé abrir esa aplicación automáticamente.")
+    }
+} else {
+    show("Todavía estoy en pruebas. Puedes decir: llama a un contacto, abre Safari o abre calculadora.")
+}
