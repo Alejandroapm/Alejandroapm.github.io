@@ -15,7 +15,7 @@ const dictado = listen("After Pause", "es-ES")
 const orden = lowercase(dictado)
 
 if containsText(orden, "llama", false) {
-    const nombre = trimWhitespace(replaceText('^.*(?:llama|llamar)\\s+(?:a\\s+)?', "", orden, false, true))
+    const nombre = trimWhitespace(replaceText('^.*(?:llama|llamar)\s+(?:a\s+)?', "", orden, false, true))
     if nombre == "" {
         show("Dime a quién quieres llamar.")
     } else {
