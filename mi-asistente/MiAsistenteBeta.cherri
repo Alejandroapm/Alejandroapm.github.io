@@ -19,7 +19,7 @@ if containsText(orden, "llama", false) {
     if nombre == "" {
         show("Dime a quién quieres llamar.")
     } else {
-        const contactos = search(nombre, 5, [Contacts])
+        const contactos = search(nombre, 5, ["Contacts"])
         const cantidad = count(contactos)
         if cantidad == 1 {
             const persona = getFirstItem(contactos)
